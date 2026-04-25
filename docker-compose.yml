@@ -1,0 +1,100 @@
+# writer-mate — docker compose dev stack
+#
+# Serwisy:
+#   postgres    — PostgreSQL 16 + pgvector
+#   markitdown  — Python sidecar: konwersja dokumentów → Markdown (HTTP + MCP)
+#   bashtool    — MCP sidecar: agent shell z dostępem do sieci wewnętrznej
+#
+# Sieć wewnętrzna: writer-net (bridge)
+# Aplikacja Next.js NIE jest tutaj — chodzi lokalnie (npm run dev) lub na Vercelu.
+
+services:
+
+  # ─────────────────────────────────────────
+  # 1. PostgreSQL 16 + pgvector
+  # ─────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: writer-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: writermate
+      POSTGRES_USER: writermate
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-writermate_dev}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - writer-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U writermate -d writermate"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────
+  # 2. Markitdown sidecar
+  #    HTTP API:  POST /convert  → { markdown: "..." }
+  #    MCP:       stdio lub SSE na porcie 8001
+  # ─────────────────────────────────────────
+  markitdown:
+    build:
+      context: ./docker/markitdown
+      dockerfile: Dockerfile
+    container_name: writer-markitdown
+    restart: unless-stopped
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8000"
+    ports:
+      - "8000:8000"   # HTTP API
+      - "8001:8001"   # MCP SSE endpoint
+    networks:
+      - writer-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ─────────────────────────────────────────
+  # 3. BashTool MCP sidecar
+  #    MCP server (SSE) na porcie 8002
+  #    Dostęp do sieci writer-net → może wołać markitdown i inne MCP
+  #    Workspace aplikacji montowany jako /workspace (read-write)
+  # ─────────────────────────────────────────
+  bashtool:
+    build:
+      context: ./docker/bashtool
+      dockerfile: Dockerfile
+    container_name: writer-bashtool
+    restart: unless-stopped
+    environment:
+      MCP_PORT: "8002"
+      MARKITDOWN_URL: "http://markitdown:8000"
+      # dodatkowe MCP z tej samej sieci
+      EXTRA_MCP_URLS: ""
+    volumes:
+      # montuj workspace projektu jako /workspace — agent może czytać/pisać pliki
+      - .:/workspace
+    ports:
+      - "8002:8002"   # MCP SSE dla VS Code Copilot / agentów
+    networks:
+      - writer-net
+    depends_on:
+      markitdown:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8002/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+networks:
+  writer-net:
+    driver: bridge
+
+volumes:
+  postgres_data:

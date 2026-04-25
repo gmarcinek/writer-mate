@@ -1,0 +1,29 @@
+@import "tailwindcss";
+@import "@tailwindcss/typography";
+
+:root {
+  --background: #0f0f0f;
+  --foreground: #e8e6e3;
+  --surface: #1a1a1a;
+  --surface-hover: #242424;
+  --border: #2e2e2e;
+  --accent: #c9a96e;
+  --accent-dim: #a07840;
+  --text-muted: #888;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Georgia", "Times New Roman", serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Prose override dla edytora */
+.prose {
+  color: var(--foreground);
+}
