@@ -7,26 +7,55 @@ export default async function BookList() {
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+      <p
+        style={{
+          fontSize: "11px",
+          fontWeight: 600,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: "var(--color-text-muted)",
+          padding: "0 4px",
+        }}
+      >
         Biblioteka
-      </h2>
+      </p>
       {books.length === 0 ? (
-        <p className="text-xs text-[var(--color-text-muted)] italic">Brak książek</p>
+        <p style={{ fontSize: "13px", color: "var(--color-text-muted)", fontStyle: "italic", padding: "4px" }}>
+          Brak projektów
+        </p>
       ) : (
-        <ul className="flex flex-col gap-1">
+        <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "2px" }}>
           {books.map((book) => (
             <li
               key={book.id}
-              className="group flex items-center gap-1 rounded-md hover:bg-[var(--color-surface-hover)] text-sm"
+              className="group"
+              style={{ display: "flex", alignItems: "center", borderRadius: "6px" }}
             >
               <Link
                 href={`/books/${book.id}`}
-                className="flex flex-col gap-0.5 px-2 py-1.5 min-w-0 flex-1"
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "2px",
+                  padding: "8px 8px",
+                  textDecoration: "none",
+                  minWidth: 0,
+                }}
               >
-                <span className="font-medium text-[var(--color-foreground)] truncate">
+                <span
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    color: "var(--color-foreground)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
                   {book.title}
                 </span>
-                <span className="text-xs text-[var(--color-text-muted)]">
+                <span style={{ fontSize: "11px", color: "var(--color-text-muted)" }}>
                   {book.createdAt.toLocaleDateString("pl-PL")}
                 </span>
               </Link>

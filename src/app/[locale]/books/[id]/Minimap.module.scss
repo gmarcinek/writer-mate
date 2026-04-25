@@ -1,0 +1,12 @@
+.wrapper {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  background: rgba(30, 27, 46, 0.2);
+  border-radius: 0px;
+  cursor: pointer;
+  user-select: none;
+  overflow: hidden;
+  z-index: 20;
+}

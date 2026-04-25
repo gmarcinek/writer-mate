@@ -1,15 +1,20 @@
 ﻿import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { getTheme } from "@/lib/theme";
-import AppBar from "@/components/AppBar";
 import StatusBar from "@/components/StatusBar";
-import ToolsPanel from "@/modules/tools-panel";
-import LayersPanel from "@/modules/layers-panel";
 import EntitiesPanel from "@/modules/entities-panel";
 import BookList from "@/modules/books-list";
+import Sidebar from "@/modules/sidebar";
+
+const inter = Inter({
+  subsets: ["latin", "latin-ext"],
+  variable: "--font-inter",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Writer Mate",
@@ -32,25 +37,27 @@ export default async function LocaleLayout({
 
   const [messages, theme] = await Promise.all([getMessages(), getTheme()]);
 
+  const settingsContent = (
+    <p className="text-sm text-[var(--color-text-muted)]">Ustawienia — wkrótce</p>
+  );
+
   return (
-    <html lang={locale} data-theme={theme}>
-      <body className="app-shell">
+    <html lang={locale} data-theme={theme} className={inter.variable}>
+      <body className={`app-shell ${inter.className}`}>
         <NextIntlClientProvider messages={messages}>
-          <header className="app-shell-header border-b border-[var(--color-border)] flex items-center justify-between px-4">
-            <AppBar />
-          </header>
-          <aside className="app-shell-left flex flex-col gap-4 p-3 overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)]">
-            <ToolsPanel />
-            <LayersPanel />
-            <BookList />
+          <aside className="app-shell-left border-r border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+            <Sidebar
+              projectsContent={<BookList />}
+              settingsContent={settingsContent}
+            />
           </aside>
           <main className="app-shell-main">
             {children}
           </main>
-          <aside className="app-shell-right p-3 overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-surface)]">
+          <aside className="app-shell-right border-l border-[var(--color-border)] bg-[var(--color-surface)] overflow-y-auto p-4">
             <EntitiesPanel />
           </aside>
-          <footer className="app-shell-footer border-t border-[var(--color-border)] bg-[var(--color-surface)] flex items-center px-4">
+          <footer className="app-shell-footer overflow-hidden">
             <StatusBar />
           </footer>
         </NextIntlClientProvider>

@@ -81,3 +81,15 @@
   --z-modal: 200;
   --z-toast: 300;
 }
+
+/* ── App shell colors ── */
+:root[data-theme="light"] {
+  --color-header-bg: #1e1b2e;
+  --color-header-fg: #f5f5f5;
+  --color-header-muted: #a09ab8;
+}
+:root[data-theme="dark"] {
+  --color-header-bg: #0d0b14;
+  --color-header-fg: #f5f5f5;
+  --color-header-muted: #6b6480;
+}

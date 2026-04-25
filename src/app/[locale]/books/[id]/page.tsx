@@ -1,5 +1,6 @@
-﻿import { notFound } from "next/navigation";
+import { notFound } from "next/navigation";
 import { getBookById } from "@/app/actions/books";
+import PaperToggle from "./PaperToggle";
 
 export default async function BookPage({
   params,
@@ -11,16 +12,15 @@ export default async function BookPage({
   if (!book) notFound();
 
   return (
-    <div className="h-full overflow-y-auto p-6">
-      <h1 className="text-xl font-semibold text-[var(--color-foreground)] mb-4">
-        {book.title}
-      </h1>
+    <div style={{ height: "100%", overflowY: "auto" }}>
       {book.rawContent ? (
-        <pre className="whitespace-pre-wrap text-sm text-[var(--color-foreground)] font-[var(--font-serif)] leading-relaxed">
-          {book.rawContent}
-        </pre>
+        <PaperToggle title={book.title} content={book.rawContent} />
       ) : (
-        <p className="text-sm text-[var(--color-text-muted)] italic">Brak treści</p>
+        <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <p style={{ fontSize: "14px", color: "var(--color-text-muted)", fontStyle: "italic" }}>
+            Brak treści
+          </p>
+        </div>
       )}
     </div>
   );

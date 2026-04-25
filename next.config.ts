@@ -4,10 +4,12 @@ import createNextIntlPlugin from "next-intl/plugin";
 const withNextIntl = createNextIntlPlugin();
 
 const nextConfig: NextConfig = {
-  experimental: {
-    // serverComponentsExternalPackages przeniesione do serverExternalPackages w Next 15
-  },
   serverExternalPackages: ["pg"],
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "50mb",
+    },
+  },
 };
 
 export default withNextIntl(nextConfig);

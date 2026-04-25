@@ -146,3 +146,21 @@ as SomeType (bez uzasadnienia)
 typeof documents.$inferSelect
 InferSelectModel<typeof documents>
 ```
+
+### Style — CSS Modules (SCSS)
+
+Każdy komponent React ma własny plik stylów o nazwie `ComponentName.module.scss` w tym samym katalogu co komponent.
+
+- Nie stosuj Tailwind klas bezpośrednio w JSX dla stylowania strukturalnego — używaj klas ze SCSS module.
+- Tailwind może być używany pomocniczo (np. `cn()` do warunkowych klas) ale główne style idą do `.module.scss`.
+- Import: `import styles from "./ComponentName.module.scss"` → użycie: `className={styles.wrapper}`.
+- `sass` jest zainstalowany w projekcie.
+
+### React — unikaj useEffect
+
+Preferuj hooki i callbacki zamiast `useEffect` gdzie tylko możliwe.
+
+- **Derywacje stanu** → obliczaj bezpośrednio w renderze lub przez `useMemo`, nie przez `useEffect` + `setState`.
+- **Synchronizacja z DOM** → używaj `useCallback` + event handlerów, `ResizeObserver` w `useEffect` jest akceptowalny gdy nie ma alternatywy.
+- **Pobieranie danych** → server component lub server action, nie `useEffect` + fetch po stronie klienta.
+- `useEffect` dozwolony tylko gdy operacja wymaga bezpośredniego dostępu do DOM lub subskrypcji zewnętrznej (scroll, resize, WebSocket).

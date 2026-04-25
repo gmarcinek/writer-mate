@@ -2,7 +2,7 @@
 @import "../design-system/tokens.css";
 @plugin "@tailwindcss/typography";
 
-* {
+*, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -13,30 +13,26 @@ html, body {
 }
 
 body {
-  background: var(--color-background);
+  background-color: var(--color-background);
   color: var(--color-foreground);
-  font-family: "Georgia", "Times New Roman", serif;
+  font-size: 14px;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .app-shell {
   display: grid;
-  grid-template-rows: 48px 1fr 20px;
-  grid-template-columns: 260px 1fr 260px;
+  grid-template-rows: 1fr 24px;
+  grid-template-columns: 280px 1fr 280px;
   grid-template-areas:
-    "header header header"
     "left   main   right"
     "footer footer footer";
   min-height: 100vh;
   width: 100%;
 }
 
-.app-shell-header { grid-area: header; }
 .app-shell-left   { grid-area: left; }
 .app-shell-main   { grid-area: main; overflow: auto; }
 .app-shell-right  { grid-area: right; }
 .app-shell-footer { grid-area: footer; }
-
-.prose {
-  color: var(--color-foreground);
-}

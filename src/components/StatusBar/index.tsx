@@ -3,9 +3,19 @@
 export default async function StatusBar() {
   const t = await getTranslations("StatusBar");
   return (
-    <div className="flex items-center justify-between w-full h-full">
-      <span className="text-[10px] text-[--color-text-muted]">{t("ready")}</span>
-      <span className="text-[10px] text-[--color-text-muted]">v0.1.0</span>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        width: "100%",
+        height: "100%",
+        padding: "0 20px",
+        background: "var(--color-header-bg)",
+      }}
+    >
+      <span style={{ fontSize: "11px", color: "var(--color-header-muted)" }}>{t("ready")}</span>
+      <span style={{ fontSize: "11px", color: "var(--color-header-muted)" }}>v0.1.0</span>
     </div>
   );
 }
