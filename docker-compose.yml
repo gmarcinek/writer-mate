@@ -92,6 +92,36 @@ services:
       timeout: 5s
       retries: 3
 
+  # ─────────────────────────────────────────
+  # 4. Playwright MCP sidecar
+  #    MCP server (SSE) na porcie 8003
+  #    Sterowanie przeglądarką: navigate, click, fill, screenshot, get_text
+  #    Screenshots zapisywane do /workspace/screenshots/
+  #    host.docker.internal → dostęp do Next.js na hoście (localhost:3000)
+  # ─────────────────────────────────────────
+  playwright:
+    build:
+      context: ./docker/playwright
+      dockerfile: Dockerfile
+    container_name: writer-playwright
+    restart: unless-stopped
+    environment:
+      MCP_PORT: "8003"
+      APP_URL: "http://host.docker.internal:3000"
+    volumes:
+      - .:/workspace
+    ports:
+      - "8003:8003"   # MCP SSE dla VS Code Copilot / agentów
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - writer-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8003/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
 networks:
   writer-net:
     driver: bridge

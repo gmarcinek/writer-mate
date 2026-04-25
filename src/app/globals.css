@@ -1,29 +1,42 @@
 @import "tailwindcss";
-@import "@tailwindcss/typography";
-
-:root {
-  --background: #0f0f0f;
-  --foreground: #e8e6e3;
-  --surface: #1a1a1a;
-  --surface-hover: #242424;
-  --border: #2e2e2e;
-  --accent: #c9a96e;
-  --accent-dim: #a07840;
-  --text-muted: #888;
-}
+@import "../design-system/tokens.css";
+@plugin "@tailwindcss/typography";
 
 * {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--color-background);
+  color: var(--color-foreground);
   font-family: "Georgia", "Times New Roman", serif;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Prose override dla edytora */
+.app-shell {
+  display: grid;
+  grid-template-rows: 48px 1fr 20px;
+  grid-template-columns: 260px 1fr 260px;
+  grid-template-areas:
+    "header header header"
+    "left   main   right"
+    "footer footer footer";
+  min-height: 100vh;
+  width: 100%;
+}
+
+.app-shell-header { grid-area: header; }
+.app-shell-left   { grid-area: left; }
+.app-shell-main   { grid-area: main; overflow: auto; }
+.app-shell-right  { grid-area: right; }
+.app-shell-footer { grid-area: footer; }
+
 .prose {
-  color: var(--foreground);
+  color: var(--color-foreground);
 }

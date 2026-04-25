@@ -7,19 +7,16 @@ Port 8001: MCP SSE       →  tool: convert_to_markdown
 import asyncio
 import os
 import tempfile
-from contextlib import asynccontextmanager
-from typing import Any
 
 import httpx
 import uvicorn
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
 from markitdown import MarkItDown
-from mcp.server import Server
-from mcp.server.sse import SseServerTransport
-from mcp.types import TextContent, Tool
+from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel
-from starlette.routing import Route
+from starlette.applications import Starlette
+from starlette.responses import JSONResponse
+from starlette.routing import Mount, Route
 
 # ─── MarkItDown instance ───────────────────────────────────────────────────────
 md = MarkItDown()
@@ -74,89 +71,38 @@ async def convert_file(file: UploadFile = File(...)):
         os.unlink(tmp_path)
 
 
-# ─── MCP Server ────────────────────────────────────────────────────────────────
-mcp_server = Server("markitdown-mcp")
+# ─── FastMCP Server ────────────────────────────────────────────────────────────
+mcp = FastMCP("markitdown-mcp")
 
 
-@mcp_server.list_tools()
-async def list_tools() -> list[Tool]:
-    return [
-        Tool(
-            name="convert_to_markdown",
-            description=(
-                "Konwertuje dokument (URL, plik PDF/DOCX/XLSX/PPTX/HTML/obraz/audio) "
-                "do czystego Markdown. Podaj 'url' lub 'content' (raw HTML/tekst)."
-            ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "url": {"type": "string", "description": "URL do skonwertowania"},
-                    "content": {
-                        "type": "string",
-                        "description": "Surowy HTML lub tekst",
-                    },
-                },
-            },
-        )
-    ]
-
-
-@mcp_server.call_tool()
-async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
-    if name != "convert_to_markdown":
-        raise ValueError(f"Nieznane narzędzie: {name}")
-
+@mcp.tool()
+async def convert_to_markdown(url: str = "", content: str = "") -> str:
+    """Konwertuje dokument (URL, plik PDF/DOCX/XLSX/PPTX/HTML/obraz/audio) do czystego Markdown. Podaj url lub content (raw HTML/tekst)."""
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             "http://localhost:8000/convert",
-            json=arguments,
+            json={"url": url, "content": content},
             timeout=60.0,
         )
         resp.raise_for_status()
-        data = resp.json()
-
-    return [TextContent(type="text", text=data["markdown"])]
-
-
-# ─── MCP SSE app (Starlette) ───────────────────────────────────────────────────
-sse_transport = SseServerTransport("/messages/")
-
-
-async def handle_sse(scope, receive, send):
-    async with mcp_server.run_sse_async() as streams:
-        await sse_transport.handle_sse(
-            scope, receive, send, streams[0], streams[1]
-        )
-
-
-from starlette.applications import Starlette
-
-mcp_app = Starlette(
-    routes=[
-        Route("/sse", endpoint=handle_sse),
-        Route("/messages/", endpoint=sse_transport.handle_post_message, methods=["POST"]),
-        Route("/health", endpoint=lambda req: JSONResponse({"status": "ok", "service": "markitdown-mcp"})),
-    ]
-)
+    return resp.json()["markdown"]
 
 
 # ─── Uruchomienie obu serwerów ─────────────────────────────────────────────────
+async def mcp_health(request):
+    return JSONResponse({"status": "ok", "service": "markitdown-mcp"})
+
+
+mcp_app = Starlette(routes=[
+    Route("/health", mcp_health),
+    Mount("/", app=mcp.sse_app()),
+])
+
+
 async def main():
-    config_http = uvicorn.Config(
-        http_app,
-        host=os.getenv("HOST", "0.0.0.0"),
-        port=int(os.getenv("PORT", "8000")),
-        log_level="info",
-    )
-    config_mcp = uvicorn.Config(
-        mcp_app,
-        host=os.getenv("HOST", "0.0.0.0"),
-        port=8001,
-        log_level="info",
-    )
-    server_http = uvicorn.Server(config_http)
-    server_mcp = uvicorn.Server(config_mcp)
-    await asyncio.gather(server_http.serve(), server_mcp.serve())
+    http_server = uvicorn.Server(uvicorn.Config(http_app, host="0.0.0.0", port=8000, log_level="info"))
+    mcp_server = uvicorn.Server(uvicorn.Config(mcp_app, host="0.0.0.0", port=8001, log_level="info"))
+    await asyncio.gather(http_server.serve(), mcp_server.serve())
 
 
 if __name__ == "__main__":

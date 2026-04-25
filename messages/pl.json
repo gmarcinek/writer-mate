@@ -1,0 +1,30 @@
+{
+  "AppBar": {
+    "title": "Writer Mate"
+  },
+  "StatusBar": {
+    "ready": "Gotowy",
+    "loading": "Ładowanie\u2026"
+  },
+  "ToolsPanel": {
+    "title": "Narzędzia",
+    "uploadButton": "Wgraj plik"
+  },
+  "LayersPanel": {
+    "title": "Warstwy analizy",
+    "addLayer": "Dodaj warstwę"
+  },
+  "EntitiesPanel": {
+    "title": "Encje",
+    "empty": "Brak wyników analizy"
+  },
+  "BookViewer": {
+    "empty": "Brak załadowanej książki. Wgraj plik, aby rozpocząć."
+  },
+  "Books": {
+    "title": "Biblioteka",
+    "uploadButton": "Wgraj książkę",
+    "uploading": "Wysyłanie…",
+    "empty": "Brak książek"
+  }
+}

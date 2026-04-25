@@ -1,0 +1,30 @@
+{
+  "AppBar": {
+    "title": "Writer Mate"
+  },
+  "StatusBar": {
+    "ready": "Ready",
+    "loading": "Loading\u2026"
+  },
+  "ToolsPanel": {
+    "title": "Tools",
+    "uploadButton": "Upload file"
+  },
+  "LayersPanel": {
+    "title": "Analysis Layers",
+    "addLayer": "Add layer"
+  },
+  "EntitiesPanel": {
+    "title": "Entities",
+    "empty": "No analysis results"
+  },
+  "BookViewer": {
+    "empty": "No book loaded. Upload a file to get started."
+  },
+  "Books": {
+    "title": "Library",
+    "uploadButton": "Upload book",
+    "uploading": "Uploading…",
+    "empty": "No books yet"
+  }
+}

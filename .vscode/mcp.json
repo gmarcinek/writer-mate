@@ -1,27 +1,18 @@
 {
   // MCP servers widoczne przez GitHub Copilot Agent Mode w tym workspace
   // Wymagają: docker compose up -d
-  "mcp": {
-    "servers": {
-      // ── Markitdown: konwersja dokumentów → Markdown ──────────────────────
-      "markitdown": {
-        "type": "sse",
-        "url": "http://localhost:8001/sse"
-      },
+  "servers": {
+    // ── BashTool: agent shell + dostęp do sieci writer-net ───────────────
+    "bashtool": {
+      "type": "sse",
+      "url": "http://localhost:8002/sse"
+    },
 
-      // ── BashTool: agent shell + dostęp do sieci writer-net ───────────────
-      "bashtool": {
-        "type": "sse",
-        "url": "http://localhost:8002/sse"
-      },
-
-      // ── Playwright: przeglądarka dla agenta (opcjonalnie) ─────────────────
-      // Odkomentuj po: npm install -D @playwright/mcp
-      // "playwright": {
-      //   "type": "stdio",
-      //   "command": "npx",
-      //   "args": ["@playwright/mcp@latest"]
-      // }
+    // ── Playwright: sterowanie przeglądarką (screenshot, click, navigate) ─
+    // Wymaga: docker compose up -d playwright
+    "playwright": {
+      "type": "sse",
+      "url": "http://localhost:8003/sse"
     }
   }
 }
