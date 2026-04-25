@@ -5,7 +5,7 @@ import styles from "./Minimap.module.scss";
 
 const MINIMAP_CONFIG = {
   width: 110,
-  pad: 1,
+  pad: 0,
   colors: {
     background: "#b8b8b8",
     viewportFill: "rgba(116, 73, 110, 0.25)",

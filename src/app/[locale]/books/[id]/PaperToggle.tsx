@@ -52,6 +52,7 @@ export default function PaperToggle({
               color: format === f.id ? "#fff" : "var(--color-text-muted)",
               cursor: "pointer",
               transition: "all 0.15s",
+              
             }}
           >
             {f.label}
@@ -71,6 +72,7 @@ export default function PaperToggle({
             overflowY: "auto",
             background: "var(--color-background)",
             paddingRight: "96px",
+            overflow: "hidden !important",
           }}
         >
           <div

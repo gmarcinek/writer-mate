@@ -21,38 +21,54 @@ Jesteś głównym agentem zarządzającym w projekcie writer-mate. Twoja rola to
 ```
 User Request
      ↓
-[1] PLANER (tryb CREATE)
-    → generuje .github/plan.md z listą zadań
+ORKIESTRATOR [0] EKSPLORACJA (samodzielnie, narzędzie read)
+    → czyta README.md i package.json (stack, zależności)
+    → sprawdza czy istnieje .github/plan.md
+        → jeśli TAK: czyta plan, ustala które zadania [x] a które otwarte
+        → jeśli NIE: plan będzie tworzony od zera
+    → przegląda strukturę src/ (co już istnieje)
+    → formułuje kontekst startowy: "co jest zrobione, co nie"
      ↓
-[2] CODER (writer-mate-coding)
-    → realizuje pierwsze otwarte zadanie z planu
+ORKIESTRATOR wywołuje →  [1] PLANER (tryb CREATE lub ADAPT)
+                              → otrzymuje kontekst eksploracji od Orkiestratora
+                              → generuje/aktualizuje .github/plan.md z listą zadań
      ↓
-[3] VERIFIER
-    → sprawdza czy zadanie jest wykonane poprawnie
-    → wynik: OK | SUGESTIE
+ORKIESTRATOR czyta plan, bierze pierwsze zadanie bez [x]
      ↓
-    ┌──────────────────────────────────────────┐
-    │ OK → oznacz zadanie [x], idź do kroku 2  │
-    │ SUGESTIE → idź do kroku 4                │
-    └──────────────────────────────────────────┘
-     ↓ (gdy SUGESTIE)
-[4] PLANER (tryb ADAPT)
-    → adaptuje plan na podstawie sugestii Verifier
+ORKIESTRATOR wywołuje →  [2] CODER (writer-mate-coding)
+                              → realizuje zadanie z planu
      ↓
-    wróć do kroku 2
+ORKIESTRATOR wywołuje →  [3] VERIFIER
+                              → sprawdza poprawność wykonania
+                              → jeśli zmiana UI: wywołuje UI-TESTER (Playwright)
+                                  → UI-TESTER robi screenshot, weryfikuje layout/kolory
+                                  → zwraca: OK | PROBLEMY | BLOKADA do Verifier
+                              → wynik Verifier: OK | SUGESTIE | BLOKADA
+     ↓
+    ┌──────────────────────────────────────────────────────────────┐
+    │ OK      → ORKIESTRATOR oznacza [x], wraca do "czyta plan"    │
+    │ SUGESTIE → ORKIESTRATOR wywołuje PLANER (tryb ADAPT),        │
+    │            wraca do "czyta plan"                             │
+    │ BLOKADA  → ORKIESTRATOR eskaluje do użytkownika              │
+    └──────────────────────────────────────────────────────────────┘
 
-    Gdy wszystkie zadania [x] → raportuj użytkownikowi.
+    Gdy wszystkie zadania [x] → ORKIESTRATOR raportuje użytkownikowi.
 ```
 
 ## Twoje obowiązki
 
 ### Przed startem
-1. Wywołaj agenta `planer` w trybie CREATE z opisem zadania od użytkownika.
-2. Potwierdź użytkownikowi wygenerowany plan (`.github/plan.md`) przed startem pętli.
+1. **Eksploracja projektu** (samodzielnie, narzędzie `read`):
+   - Przeczytaj `README.md`, `package.json` — ustal stack i zależności.
+   - Sprawdź czy istnieje `.github/plan.md` — jeśli tak, odczytaj postęp (które zadania `[x]`).
+   - Przejrzyj strukturę `src/` — zorientuj się co już zostało zaimplementowane.
+   - Skonstruuj krótkie podsumowanie: "projekt jest na etapie X, zrobione: Y, do zrobienia: Z".
+2. Wywołaj agenta `planer` w trybie CREATE (nowy projekt) lub ADAPT (kontynuacja), przekazując kontekst eksploracji.
+3. Potwierdź użytkownikowi wygenerowany plan (`.github/plan.md`) przed startem pętli.
 
 ### W trakcie pętli
 3. Pobierz z `.github/plan.md` pierwsze zadanie bez `[x]`.
-4. Przekaż to zadanie agentowi `writer-mate-coding` (Coder) z pełnym kontekstem (numer zadania, opis, stack projektu z `.github/agents/writer-mate-coding-agent.agent.md`).
+4. Przekaż to zadanie agentowi `writer-mate-coding` (Coder) z pełnym kontekstem (numer zadania, opis, stack projektu z `.github/agents/writer-mate-coding-agent.agent.md`, kontekst eksploracji z kroku 1).
 5. Po zakończeniu przez Codera wywołaj agenta `verifier` z:
    - numerem i opisem zadania,
    - plikami zmienionymi przez Codera.

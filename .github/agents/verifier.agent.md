@@ -6,6 +6,8 @@ tools:
   - search
   - read/problems
   - agent
+agents:
+  - ui-tester
 user-invocable: false
 ---
 
@@ -40,6 +42,21 @@ Zweryfikuj zgodność z regułami z `writer-mate-coding-agent.agent.md`:
 ### 4. Sprawdź kompletność
 - Czy zadanie jest w pełni zrealizowane, czy tylko częściowo?
 - Czy są edge case'y, które trzeba obsłużyć?
+
+### 5. Test wizualny UI (jeśli zadanie dotyczy UI)
+Jeśli zmienione pliki zawierają komponenty, style lub layout — wywołaj agenta `ui-tester` przekazując:
+- **url**: adres strony do sprawdzenia (np. `http://localhost:3000` lub konkretna ścieżka)
+- **scenario**: krótki opis co sprawdzić (np. `"Sprawdź czy nowy przycisk jest widoczny w toolbarze i ma poprawny kolor"`)
+
+Przykład wywołania:
+```
+url: http://localhost:3000/pl
+scenario: Sprawdź czy komponent X jest wyrenderowany, kliknij go i zweryfikuj stan po kliknięciu
+```
+
+Wynik `ui-tester` (OK / PROBLEMY / BLOKADA) wlicz do swojej ostatecznej oceny:
+- PROBLEMY → traktuj jak SUGESTIE (dodaj do listy poprawek)
+- BLOKADA z ui-tester → eskaluj jako BLOKADA do Orkiestratora
 
 ## Wyjście
 
