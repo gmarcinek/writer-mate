@@ -4,17 +4,11 @@ import { useEffect, useRef, useCallback } from "react";
 import styles from "./Minimap.module.scss";
 
 const MINIMAP_CONFIG = {
-  width: 90,
-  contentScale: 0.15,
-  barHeightRatio: 0.6,
-  charWidthHeading: 7,
-  charWidthText: 6,
-  padX: 4,
+  width: 110,
+  pad: 1,
   colors: {
-    background: "#00000013",
-    heading: "rgba(143, 109, 109, 0.75)",
-    text: "rgba(180,170,210,0.45)",
-    viewportFill: "rgba(94,48,192,0.12)",
+    background: "#b8b8b8",
+    viewportFill: "rgba(116, 73, 110, 0.25)",
     viewportStroke: "rgba(124,92,191,0.8)",
   },
 };
@@ -24,99 +18,109 @@ export default function Minimap({
 }: {
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
-
-  // Stan potrzebny obsłudze myszy — aktualizowany w draw()
-  const offsetRef = useRef(0);     // ile canvas jest przesunięty względem wrappera
-  const vpHeightRef = useRef(0);   // wysokość slidera w px canvasa/wrappera
-
-  // Throttle rysowania do rAF
+  const thumbRef = useRef<HTMLDivElement>(null);
+  const cloneHostRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const sourceRef = useRef<HTMLElement | null>(null);
+  const offsetRef = useRef(0);
+  const vpHeightRef = useRef(0);
+  const scaleRef = useRef(1);
   const rafIdRef = useRef<number | null>(null);
+  const syncRafIdRef = useRef<number | null>(null);
 
-  const draw = useCallback(() => {
+  const findSource = useCallback(() => {
     const container = scrollContainerRef.current;
-    const canvas = canvasRef.current;
+    if (!container) return null;
+    return container.querySelector("[data-minimap-source]") as HTMLElement | null;
+  }, [scrollContainerRef]);
+
+  const layout = useCallback(() => {
+    const container = scrollContainerRef.current;
     const wrap = wrapRef.current;
-    if (!container || !canvas || !wrap) return;
+    const thumb = thumbRef.current;
+    const viewport = viewportRef.current;
+    const source = sourceRef.current ?? findSource();
+    if (!container || !wrap || !thumb || !viewport || !source) return;
 
-    const {
-      width, contentScale, barHeightRatio,
-      charWidthHeading, charWidthText, padX, colors,
-    } = MINIMAP_CONFIG;
+    sourceRef.current = source;
 
+    const { width, pad, colors } = MINIMAP_CONFIG;
     const scrollHeight = container.scrollHeight;
     const clientHeight = container.clientHeight;
     const scrollTop = container.scrollTop;
     const wrapperHeight = wrap.clientHeight;
     if (wrapperHeight === 0) return;
 
-    // Canvas zawsze reprezentuje CAŁY dokument w stałej skali
-    const canvasHeight = Math.max(scrollHeight * contentScale, wrapperHeight);
+    const containerRect = container.getBoundingClientRect();
+    const sourceRect = source.getBoundingClientRect();
+    const sourceWidth = Math.max(1, sourceRect.width);
+    const sourceHeight = Math.max(1, sourceRect.height);
+    const contentScale = Math.min(1, (width - pad * 2) / sourceWidth);
+    scaleRef.current = contentScale;
 
-    if (canvas.width !== width) canvas.width = width;
-    if (canvas.height !== canvasHeight) canvas.height = canvasHeight;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    ctx.fillStyle = colors.background;
-    ctx.fillRect(0, 0, width, canvasHeight);
-
-    // Linie tekstu
-    const contentEl = container.querySelector("[data-minimap-content]") as HTMLElement | null;
-    if (contentEl) {
-      const lines = contentEl.innerText.split("\n");
-      const actualLineHeight = contentEl.scrollHeight / Math.max(lines.length, 1);
-      const innerW = width - padX * 2;
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const y = i * actualLineHeight * contentScale;
-        if (y > canvasHeight) break;
-        const barH = Math.max(1, actualLineHeight * contentScale * barHeightRatio);
-        if (line.startsWith("#")) {
-          ctx.fillStyle = colors.heading;
-          ctx.fillRect(padX, y, Math.min(line.length * charWidthHeading * contentScale, innerW), barH + 1);
-        } else if (line.trim().length > 0) {
-          ctx.fillStyle = colors.text;
-          ctx.fillRect(padX, y, Math.min(line.length * charWidthText * contentScale, innerW), barH);
-        }
-      }
-    }
-
-    // Slider (aktualny viewport) — pozycja w canvasie
-    const vpTop = scrollTop * contentScale;
-    const vpHeight = clientHeight * contentScale;
-
-    ctx.fillStyle = colors.viewportFill;
-    ctx.fillRect(0, vpTop, width, vpHeight);
-    ctx.strokeStyle = colors.viewportStroke;
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(0.75, vpTop + 0.75, width - 1.5, Math.max(vpHeight - 1.5, 2));
-
-    // VS Code-style proporcjonalny offset:
-    // slider płynnie wędruje od góry do dołu wrappera wraz ze scrollem dokumentu.
-    // Niezmiennik: vpTop_wrapper / (wrapperHeight - vpHeight) === scrollTop / maxScroll
+    const virtualHeight = Math.max(scrollHeight * contentScale, wrapperHeight);
     const maxScroll = Math.max(1, scrollHeight - clientHeight);
-    const maxOffset = Math.max(0, canvasHeight - wrapperHeight);
+    const maxOffset = Math.max(0, virtualHeight - wrapperHeight);
     const scrollRatio = Math.min(1, Math.max(0, scrollTop / maxScroll));
     const offset = scrollRatio * maxOffset;
 
-    canvas.style.transform = `translateY(-${offset}px)`;
+    const sourceTop = sourceRect.top - containerRect.top + scrollTop;
+    const thumbWidth = sourceWidth * contentScale;
+    const thumbLeft = (width - thumbWidth) / 2;
+    const thumbTop = sourceTop * contentScale - offset;
+
+    thumb.style.width = `${sourceWidth}px`;
+    thumb.style.height = `${sourceHeight}px`;
+    thumb.style.transformOrigin = "top left";
+    thumb.style.transform = `translate(${thumbLeft}px, ${thumbTop}px) scale(${contentScale})`;
+
+    const vpTop = scrollTop * contentScale - offset;
+    const vpHeight = clientHeight * contentScale;
+    viewport.style.top = `${vpTop}px`;
+    viewport.style.height = `${vpHeight}px`;
+    viewport.style.background = colors.viewportFill;
+    viewport.style.border = `1.5px solid ${colors.viewportStroke}`;
+
     offsetRef.current = offset;
     vpHeightRef.current = vpHeight;
-  }, [scrollContainerRef]);
+  }, [findSource, scrollContainerRef]);
 
-  const scheduleDraw = useCallback(() => {
+  const syncClone = useCallback(() => {
+    const host = cloneHostRef.current;
+    const source = findSource();
+    if (!host || !source) return;
+
+    sourceRef.current = source;
+
+    const clone = source.cloneNode(true) as HTMLElement;
+    clone.removeAttribute("data-minimap-source");
+    clone.setAttribute("aria-hidden", "true");
+    clone.style.margin = "0";
+    clone.style.maxWidth = "none";
+    clone.style.pointerEvents = "none";
+    clone.style.userSelect = "none";
+
+    host.replaceChildren(clone);
+    layout();
+  }, [findSource, layout]);
+
+  const scheduleLayout = useCallback(() => {
     if (rafIdRef.current !== null) return;
     rafIdRef.current = requestAnimationFrame(() => {
       rafIdRef.current = null;
-      draw();
+      layout();
     });
-  }, [draw]);
+  }, [layout]);
 
-  // Pozycja w wrapperze → scrollTop dokumentu.
-  // grabOffset = ile px od górnej krawędzi slidera trzymamy "pod kursorem".
+  const scheduleSync = useCallback(() => {
+    if (syncRafIdRef.current !== null) return;
+    syncRafIdRef.current = requestAnimationFrame(() => {
+      syncRafIdRef.current = null;
+      syncClone();
+    });
+  }, [syncClone]);
+
   const wrapperYToScrollTop = useCallback((wrapperY: number, grabOffset: number) => {
     const container = scrollContainerRef.current;
     const wrap = wrapRef.current;
@@ -133,26 +137,37 @@ export default function Minimap({
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
-    draw();
-    const onScroll = () => scheduleDraw();
+
+    syncClone();
+
+    const onScroll = () => scheduleLayout();
     container.addEventListener("scroll", onScroll, { passive: true });
-    const ro = new ResizeObserver(() => scheduleDraw());
+
+    const ro = new ResizeObserver(() => scheduleLayout());
     ro.observe(container);
     if (wrapRef.current) ro.observe(wrapRef.current);
-    // Repaint jeżeli treść (długość) się zmienia
-    const contentEl = container.querySelector("[data-minimap-content]");
-    let mo: MutationObserver | null = null;
-    if (contentEl) {
-      mo = new MutationObserver(() => scheduleDraw());
-      mo.observe(contentEl, { childList: true, subtree: true, characterData: true });
+
+    const source = findSource();
+    if (source) ro.observe(source);
+
+    const mo = new MutationObserver(() => scheduleSync());
+    if (source) {
+      mo.observe(source, {
+        attributes: true,
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
     }
+
     return () => {
       container.removeEventListener("scroll", onScroll);
       ro.disconnect();
-      mo?.disconnect();
+      mo.disconnect();
       if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
+      if (syncRafIdRef.current !== null) cancelAnimationFrame(syncRafIdRef.current);
     };
-  }, [draw, scheduleDraw, scrollContainerRef]);
+  }, [findSource, scheduleLayout, scheduleSync, scrollContainerRef, syncClone]);
 
   return (
     <div
@@ -174,21 +189,14 @@ export default function Minimap({
         const rect = wrap.getBoundingClientRect();
         const wrapperY0 = e.clientY - rect.top;
         const vpHeight = vpHeightRef.current;
-
-        // Aktualna pozycja slidera w wrapperze
-        const sliderTopInCanvas = container.scrollTop * MINIMAP_CONFIG.contentScale;
-        const sliderTopInWrapper = sliderTopInCanvas - offsetRef.current;
-
-        // Czy klik trafił w slider?
+        const sliderTopInWrapper = container.scrollTop * scaleRef.current - offsetRef.current;
         const onSlider =
           wrapperY0 >= sliderTopInWrapper && wrapperY0 <= sliderTopInWrapper + vpHeight;
 
         let grabOffset: number;
         if (onSlider) {
-          // Zachowaj punkt uchwytu (slider "klei się" do kursora w tym samym miejscu)
           grabOffset = wrapperY0 - sliderTopInWrapper;
         } else {
-          // Klik poza sliderem — wyśrodkuj slider pod kursorem i jumpuj
           grabOffset = vpHeight / 2;
           container.scrollTo({
             top: wrapperYToScrollTop(wrapperY0, grabOffset),
@@ -211,10 +219,28 @@ export default function Minimap({
         window.addEventListener("mouseup", onUp);
       }}
     >
-      <canvas
-        ref={canvasRef}
-        className="block"
-        style={{ width: `${MINIMAP_CONFIG.width}px`, cursor: "pointer" }}
+      <div
+        ref={thumbRef}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          pointerEvents: "none",
+          willChange: "transform",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+        }}
+      >
+        <div ref={cloneHostRef} style={{ pointerEvents: "none" }} />
+      </div>
+      <div
+        ref={viewportRef}
+        style={{
+          position: "absolute",
+          left: 0,
+          width: "100%",
+          pointerEvents: "none",
+          boxSizing: "border-box",
+        }}
       />
     </div>
   );

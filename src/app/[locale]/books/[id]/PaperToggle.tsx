@@ -83,6 +83,7 @@ export default function PaperToggle({
             }}
           >
             <div
+              data-minimap-source
               style={{
                 width: `${fmt.width}px`,
                 maxWidth: "100%",
