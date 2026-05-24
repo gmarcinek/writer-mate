@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useRef } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import Minimap from "./Minimap";
 
 type Format = "a4" | "a5";
 
 const FORMATS: { id: Format; label: string; width: number; padding: string }[] = [
-  { id: "a5", label: "A5", width: 560, padding: "48px 56px" },
+  { id: "a5", label: "A5", width: 600, padding: "48px 56px" },
   { id: "a4", label: "A4", width: 794, padding: "72px 80px" },
 ];
 
@@ -112,18 +114,186 @@ export default function PaperToggle({
               >
                 {title}
               </h1>
-              <div
-                data-minimap-content
-                style={{
-                  fontSize: "15px",
-                  lineHeight: "1.8",
-                  fontFamily: "Georgia, Times New Roman, serif",
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                }}
-              >
-                {content}
-              </div>
+              <section>
+                <p
+                  style={{
+                    marginBottom: "14px",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    letterSpacing: "0.14em",
+                    textTransform: "uppercase",
+                    color: "#6b6b6b",
+                    fontFamily: "ui-sans-serif, system-ui, sans-serif",
+                  }}
+                >
+                  Content
+                </p>
+                <div
+                  data-minimap-content
+                  style={{
+                    fontSize: "15px",
+                    lineHeight: "1.8",
+                    fontFamily: "Georgia, Times New Roman, serif",
+                    wordBreak: "break-word",
+                  }}
+                >
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      h1: ({ node: _node, ...props }) => (
+                        <h2
+                          style={{
+                            fontSize: "1.75rem",
+                            lineHeight: 1.25,
+                            margin: "0 0 1rem",
+                            fontFamily: "Georgia, Times New Roman, serif",
+                          }}
+                          {...props}
+                        />
+                      ),
+                      h2: ({ node: _node, ...props }) => (
+                        <h3
+                          style={{
+                            fontSize: "1.375rem",
+                            lineHeight: 1.3,
+                            margin: "2rem 0 0.85rem",
+                            fontFamily: "Georgia, Times New Roman, serif",
+                          }}
+                          {...props}
+                        />
+                      ),
+                      h3: ({ node: _node, ...props }) => (
+                        <h4
+                          style={{
+                            fontSize: "1.125rem",
+                            lineHeight: 1.35,
+                            margin: "1.5rem 0 0.75rem",
+                            fontFamily: "Georgia, Times New Roman, serif",
+                          }}
+                          {...props}
+                        />
+                      ),
+                      p: ({ node: _node, ...props }) => (
+                        <p
+                          style={{
+                            margin: "0 0 1rem",
+                            whiteSpace: "pre-wrap",
+                            fontFamily: "Georgia, Times New Roman, serif",
+                          }}
+                          {...props}
+                        />
+                      ),
+                      ul: ({ node: _node, ...props }) => (
+                        <ul
+                          style={{
+                            margin: "0 0 1rem",
+                            paddingLeft: "1.4rem",
+                            fontFamily: "Georgia, Times New Roman, serif",
+                          }}
+                          {...props}
+                        />
+                      ),
+                      ol: ({ node: _node, ...props }) => (
+                        <ol
+                          style={{
+                            margin: "0 0 1rem",
+                            paddingLeft: "1.4rem",
+                            fontFamily: "Georgia, Times New Roman, serif",
+                          }}
+                          {...props}
+                        />
+                      ),
+                      li: ({ node: _node, ...props }) => (
+                        <li
+                          style={{
+                            marginBottom: "0.35rem",
+                            fontFamily: "Georgia, Times New Roman, serif",
+                          }}
+                          {...props}
+                        />
+                      ),
+                      blockquote: ({ node: _node, ...props }) => (
+                        <blockquote
+                          style={{
+                            margin: "0 0 1rem",
+                            paddingLeft: "1rem",
+                            borderLeft: "3px solid #d6d6d6",
+                            color: "#4a4a4a",
+                            fontFamily: "Georgia, Times New Roman, serif",
+                          }}
+                          {...props}
+                        />
+                      ),
+                      code: ({ node: _node, className, children, ...props }) => {
+                        const inline = !className;
+
+                        if (inline) {
+                          return (
+                            <code
+                              style={{
+                                fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace",
+                                background: "#f2f2f2",
+                                borderRadius: "4px",
+                                padding: "0.1rem 0.35rem",
+                                fontSize: "0.92em",
+                              }}
+                              {...props}
+                            >
+                              {children}
+                            </code>
+                          );
+                        }
+
+                        return (
+                          <code
+                            className={className}
+                            style={{
+                              display: "block",
+                              whiteSpace: "pre-wrap",
+                              fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace",
+                              background: "#f6f6f6",
+                              borderRadius: "8px",
+                              padding: "0.9rem 1rem",
+                              fontSize: "0.92em",
+                            }}
+                            {...props}
+                          >
+                            {children}
+                          </code>
+                        );
+                      },
+                      pre: ({ node: _node, ...props }) => (
+                        <pre style={{ margin: "0 0 1rem" }} {...props} />
+                      ),
+                      hr: ({ node: _node, ...props }) => (
+                        <hr style={{ margin: "1.5rem 0", border: 0, borderTop: "1px solid #e3e3e3" }} {...props} />
+                      ),
+                      table: ({ node: _node, ...props }) => (
+                        <table
+                          style={{
+                            width: "100%",
+                            borderCollapse: "collapse",
+                            margin: "0 0 1rem",
+                            fontFamily: "Georgia, Times New Roman, serif",
+                          }}
+                          {...props}
+                        />
+                      ),
+                      th: ({ node: _node, ...props }) => (
+                        <th
+                          style={{ border: "1px solid #dedede", padding: "0.55rem", textAlign: "left" }}
+                          {...props}
+                        />
+                      ),
+                      td: ({ node: _node, ...props }) => (
+                        <td style={{ border: "1px solid #dedede", padding: "0.55rem" }} {...props} />
+                      ),
+                    }}
+                  >
+                    {content}
+                  </ReactMarkdown>
+                </div>
+              </section>
             </div>
           </div>
         </div>
