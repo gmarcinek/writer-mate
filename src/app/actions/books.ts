@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { runReaderOrchestration } from "@/lib/reader/orchestration";
+import { ReaderMode, ReaderSourceType, type ReaderGoal } from "@/lib/reader/types";
 import { books } from "@/lib/schema";
 
 export type BookItem = {
@@ -14,6 +16,26 @@ export type BookItem = {
 };
 
 const TEXT_EXTENSIONS = new Set([".txt", ".md"]);
+
+const INITIAL_EXHAUSTIVE_READER_GOAL = {
+  mode: ReaderMode.Exhaustive,
+  prompt:
+    "Read this source exhaustively from beginning to end and produce the initial baseline handoff for the full book.",
+  requiredCoverage: {
+    minimumLineCoveragePercent: 100,
+    requireEndToEndRead: true,
+  },
+} satisfies ReaderGoal;
+
+export type UploadBookResult = {
+  id: string;
+  title: string;
+  readerSession: {
+    id: string;
+    status: string;
+    startedNewSession: boolean;
+  };
+};
 
 async function toMarkdown(file: File): Promise<string> {
   const ext = "." + (file.name.split(".").pop() ?? "").toLowerCase();
@@ -44,7 +66,7 @@ async function toMarkdown(file: File): Promise<string> {
 
 export async function uploadBook(
   formData: FormData
-): Promise<{ id: string; title: string }> {
+): Promise<UploadBookResult> {
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
     throw new Error("Brak pliku");
@@ -61,7 +83,24 @@ export async function uploadBook(
   revalidatePath("/pl");
   revalidatePath("/en");
 
-  return inserted;
+  const readerResult = await runReaderOrchestration({
+    source: {
+      sourceId: inserted.id,
+      sourceType: ReaderSourceType.BookRawContent,
+      title: inserted.title,
+      bookId: inserted.id,
+    },
+    goal: INITIAL_EXHAUSTIVE_READER_GOAL,
+  });
+
+  return {
+    ...inserted,
+    readerSession: {
+      id: readerResult.session.id,
+      status: readerResult.session.status,
+      startedNewSession: readerResult.startedNewSession,
+    },
+  };
 }
 
 export async function getBooks(): Promise<BookItem[]> {

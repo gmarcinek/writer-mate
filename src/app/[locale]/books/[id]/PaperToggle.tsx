@@ -13,9 +13,11 @@ const FORMATS: { id: Format; label: string; width: number; padding: string }[] =
 export default function PaperToggle({
   title,
   content,
+  showToolbar = true,
 }: {
   title: string;
   content: string;
+  showToolbar?: boolean;
 }) {
   const [format, setFormat] = useState<Format>("a5");
   const fmt = FORMATS.find((f) => f.id === format)!;
@@ -23,42 +25,42 @@ export default function PaperToggle({
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      {/* Toolbar */}
-      <div
-        style={{
-          flexShrink: 0,
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-          padding: "8px 16px",
-          background: "var(--color-surface)",
-          borderBottom: "1px solid var(--color-border)",
-        }}
-      >
-        <span style={{ fontSize: "12px", color: "var(--color-text-muted)", marginRight: "4px" }}>
-          Format:
-        </span>
-        {FORMATS.map((f) => (
-          <button
-            key={f.id}
-            onClick={() => setFormat(f.id)}
-            style={{
-              padding: "4px 12px",
-              fontSize: "12px",
-              fontWeight: 500,
-              borderRadius: "4px",
-              border: format === f.id ? "1.5px solid var(--color-accent)" : "1.5px solid var(--color-border)",
-              background: format === f.id ? "var(--color-accent)" : "transparent",
-              color: format === f.id ? "#fff" : "var(--color-text-muted)",
-              cursor: "pointer",
-              transition: "all 0.15s",
-              
-            }}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
+      {showToolbar ? (
+        <div
+          style={{
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "8px 16px",
+            background: "var(--color-surface)",
+            borderBottom: "1px solid var(--color-border)",
+          }}
+        >
+          <span style={{ fontSize: "12px", color: "var(--color-text-muted)", marginRight: "4px" }}>
+            Format:
+          </span>
+          {FORMATS.map((f) => (
+            <button
+              key={f.id}
+              onClick={() => setFormat(f.id)}
+              style={{
+                padding: "4px 12px",
+                fontSize: "12px",
+                fontWeight: 500,
+                borderRadius: "4px",
+                border: format === f.id ? "1.5px solid var(--color-accent)" : "1.5px solid var(--color-border)",
+                background: format === f.id ? "var(--color-accent)" : "transparent",
+                color: format === f.id ? "#fff" : "var(--color-text-muted)",
+                cursor: "pointer",
+                transition: "all 0.15s",
+              }}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {/* Outer: does NOT scroll — minimap anchors here */}
       <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
@@ -71,7 +73,7 @@ export default function PaperToggle({
             inset: 0,
             overflowY: "auto",
             background: "var(--color-background)",
-            paddingRight: "96px",
+            paddingLeft: "96px",
             overflow: "hidden !important",
           }}
         >

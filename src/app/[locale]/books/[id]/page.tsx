@@ -1,27 +1,23 @@
 import { notFound } from "next/navigation";
-import { getBookById } from "@/app/actions/books";
-import PaperToggle from "./PaperToggle";
+import { getBookById, getBooks } from "@/app/actions/books";
+import BookWorkspace from "@/modules/book-workspace";
 
 export default async function BookPage({
   params,
 }: {
   params: Promise<{ locale: string; id: string }>;
 }) {
-  const { id } = await params;
-  const book = await getBookById(id);
+  const { id, locale } = await params;
+  const [book, books] = await Promise.all([getBookById(id), getBooks()]);
   if (!book) notFound();
 
   return (
-    <div style={{ height: "100%", overflowY: "auto" }}>
-      {book.rawContent ? (
-        <PaperToggle title={book.title} content={book.rawContent} />
-      ) : (
-        <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <p style={{ fontSize: "14px", color: "var(--color-text-muted)", fontStyle: "italic" }}>
-            Brak treści
-          </p>
-        </div>
-      )}
-    </div>
+    <BookWorkspace
+      bookId={book.id}
+      locale={locale}
+      books={books.map((item) => ({ id: item.id, title: item.title }))}
+      title={book.title}
+      content={book.rawContent ?? ""}
+    />
   );
 }

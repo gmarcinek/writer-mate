@@ -41,6 +41,7 @@ __pycache__/
 *.egg-info/
 .venv/
 dist/
+docs/
 
 # Artifacts / screenshots z testów
 artifacts/

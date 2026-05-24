@@ -5,10 +5,9 @@ import { getMessages } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { getTheme } from "@/lib/theme";
-import StatusBar from "@/components/StatusBar";
 import EntitiesPanel from "@/modules/entities-panel";
 import BookList from "@/modules/books-list";
-import Sidebar from "@/modules/sidebar";
+import WorkspaceShell from "@/modules/workspace-shell";
 
 const inter = Inter({
   subsets: ["latin", "latin-ext"],
@@ -43,23 +42,14 @@ export default async function LocaleLayout({
 
   return (
     <html lang={locale} data-theme={theme} className={inter.variable}>
-      <body className={`app-shell ${inter.className}`}>
+      <body className={inter.className}>
         <NextIntlClientProvider messages={messages}>
-          <aside className="app-shell-left border-r border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
-            <Sidebar
-              projectsContent={<BookList />}
-              settingsContent={settingsContent}
-            />
-          </aside>
-          <main className="app-shell-main">
-            {children}
-          </main>
-          <aside className="app-shell-right border-l border-[var(--color-border)] bg-[var(--color-surface)] overflow-y-auto p-4">
-            <EntitiesPanel />
-          </aside>
-          <footer className="app-shell-footer overflow-hidden">
-            <StatusBar />
-          </footer>
+          <WorkspaceShell
+            projectsContent={<BookList />}
+            settingsContent={settingsContent}
+            main={children}
+            rightPanel={<EntitiesPanel />}
+          />
         </NextIntlClientProvider>
       </body>
     </html>
