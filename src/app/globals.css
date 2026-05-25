@@ -29,7 +29,7 @@ body {
 .app-shell {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
-  grid-template-columns: minmax(720px, 2fr) minmax(240px, 1fr) 2fr;
+  grid-template-columns: minmax(720px, 5fr) minmax(240px, 2fr) 5fr;
   grid-template-areas: "left   main   right";
   height: 100vh;
   width: 100%;
@@ -37,16 +37,16 @@ body {
 }
 
 .app-shell[data-sidebar-collapsed="true"] {
-  grid-template-columns: minmax(720px, 2fr) minmax(240px, 1fr) 2fr;
+  grid-template-columns: minmax(720px, 5fr) minmax(240px, 2fr) 5fr;
 }
 
 .app-shell[data-sidebar-hidden="true"] {
-  grid-template-columns: minmax(720px, 2fr) 2fr;
+  grid-template-columns: minmax(720px, 5fr) 5fr;
   grid-template-areas: "main right";
 }
 
 .app-shell[data-sidebar-hidden="true"][data-hints-open="true"] {
-  grid-template-columns: minmax(720px, 2fr) minmax(240px, 1fr) 2fr;
+  grid-template-columns: 5fr 2fr 5fr;
   grid-template-areas: "main hints right";
 }
 

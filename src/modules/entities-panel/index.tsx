@@ -484,6 +484,28 @@ export default function EntitiesPanel() {
         // Coverage stored per-layer; not accumulated in panel state
         return;
       }
+
+      if (payload.type === "hint_emitted") {
+        window.dispatchEvent(
+          new CustomEvent("hint:emitted", {
+            detail: {
+              id: payload.hintId,
+              sessionId: payload.sessionId,
+              bookId: bookId ?? "",
+              status: "pending",
+              description: payload.description,
+              startLine: payload.startLine,
+              endLine: payload.endLine,
+              fragment: payload.fragment,
+              proposedChange: payload.proposedChange,
+              appliedAt: null,
+              createdAt: payload.timestamp,
+              updatedAt: payload.timestamp,
+            },
+          })
+        );
+        return;
+      }
     };
 
     source.addEventListener("intent_recognized", handleEvent as EventListener);
@@ -495,6 +517,7 @@ export default function EntitiesPanel() {
     source.addEventListener("note_saved", handleEvent as EventListener);
     source.addEventListener("handoff_ready", handleEvent as EventListener);
     source.addEventListener("coverage", handleEvent as EventListener);
+    source.addEventListener("hint_emitted", handleEvent as EventListener);
     source.addEventListener("error", ((event: Event) => {
       if (event instanceof MessageEvent && typeof event.data === "string" && event.data.length > 0) {
         handleEvent(event as MessageEvent<string>);
@@ -568,6 +591,19 @@ export default function EntitiesPanel() {
         </div>
         <div className={styles.headerActions}>
           {isLoading && <span className={styles.subtle}>Ładowanie...</span>}
+          {layers.length > 1 && (
+            <select
+              className={styles.convSelect}
+              value={activePickerSessionId ?? layers[layers.length - 1]?.id ?? ""}
+              onChange={(e) => scrollToSession(e.target.value)}
+            >
+              {layers.map((layer, idx) => (
+                <option key={layer.id} value={layer.id}>
+                  {idx + 1}. {layer.goal.prompt.slice(0, 45)}{layer.goal.prompt.length > 45 ? "…" : ""}
+                </option>
+              ))}
+            </select>
+          )}
           {layers.length > 0 && (
             <button
               type="button"
@@ -580,41 +616,6 @@ export default function EntitiesPanel() {
           )}
         </div>
       </header>
-
-      {/* Conversation picker */}
-      {layers.length > 0 && (
-        <div className={styles.convPicker}>
-          <div className={styles.convPickerList}>
-            {layers.map((layer, idx) => (
-              <button
-                key={layer.id}
-                type="button"
-                className={[
-                  styles.convPickerChip,
-                  (activePickerSessionId ?? layers[layers.length - 1]?.id) === layer.id
-                    ? styles.convPickerChipActive
-                    : "",
-                  streamingLayerId === layer.id ? styles.convPickerChipStreaming : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                onClick={() => scrollToSession(layer.id)}
-                title={layer.goal.prompt}
-              >
-                {idx + 1}. {layer.goal.prompt.slice(0, 28)}{layer.goal.prompt.length > 28 ? "…" : ""}
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            className={styles.newConvButton}
-            onClick={focusNewConversation}
-            title="Nowa konwersacja"
-          >
-            ＋
-          </button>
-        </div>
-      )}
 
       <div ref={chatAreaRef} className={styles.chatArea}>
         <div className={styles.conversationList}>

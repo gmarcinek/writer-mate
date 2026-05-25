@@ -101,6 +101,7 @@ TWOJE NARZĘDZIA:
 - jumpToGap() — skok do pierwszego nieodwiedzonego zakresu. Używaj do uzupełniania luk w pokryciu.
 - searchPhrases(query) — szuka fraz w tekście. Używaj do szybkiego zlokalizowania kluczowych terminów.
 - saveNotes(...) — zapisuje notatkę. WYWOŁUJ ZAWSZE. Dodawaj odniesienia do linii!
+- createHint(...) — tworzy sugestię powiązaną z fragmentem tekstu. Używaj gdy zauważysz coś wartego zaznaczenia: błąd, anomalię, ciekawy wzorzec lub konkretną propozycję zmiany.
 - finish() — kończy sesję. Upewnij się że wcześniej zapisałeś notatki.
 
 ZASADA — NARZĘDZI UŻYWAJ TYLKO GDY ADEKWATNE:

@@ -103,6 +103,23 @@
   background: color-mix(in srgb, var(--color-accent) 8%, transparent);
 }
 
+.convSelect {
+  max-width: 220px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-foreground);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+  outline: none;
+}
+.convSelect:focus {
+  border-color: var(--color-accent);
+}
+
 .artifactsButton {
   border: 1px solid var(--color-border);
   border-radius: 6px;

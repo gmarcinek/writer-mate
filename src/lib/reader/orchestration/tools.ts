@@ -10,6 +10,7 @@ import { buildFinishModule } from "./tools/finish";
 import { buildNavigationTools } from "./tools/navigation";
 import { buildSearchTools } from "./tools/search";
 import { buildNotesTools } from "./tools/notes";
+import { buildHintsTools } from "./tools/hints";
 
 export async function createReaderTools(args: {
   session: ReaderSession;
@@ -43,12 +44,14 @@ export async function createReaderTools(args: {
   const navigationTools = buildNavigationTools(ctx);
   const searchTools = buildSearchTools(ctx);
   const notesTools = buildNotesTools(ctx, doSynthesisAndFinishWithMaster);
+  const hintsTools = buildHintsTools(ctx);
 
   return {
     tools: {
       ...navigationTools,
       ...searchTools,
       ...notesTools,
+      ...hintsTools,
       finish: finishTool,
     },
     getCursor() {
