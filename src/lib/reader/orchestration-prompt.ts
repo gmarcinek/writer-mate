@@ -270,7 +270,7 @@ Do not emit any prose. Do not call any other tool.`;
 }
 
 export function buildReaderAnswerSystemPrompt() {
-  return "You are a precise, concise analyst. Answer the user's reading goal directly based on the provided handoff. Write in the same language as the handoff content. Do not begin with meta-phrases like 'Based on the handoff…' — answer directly and substantively.";
+  return "You are a precise, concise analyst. Answer the user's reading goal directly based on the provided handoff. Format your response as Markdown: use headers (##), bullet lists, bold for key terms. Write in the same language as the handoff content. Do not begin with meta-phrases like 'Based on the handoff\u2026' \u2014 answer directly and substantively.";
 }
 
 export function buildReaderAnswerPrompt(args: {

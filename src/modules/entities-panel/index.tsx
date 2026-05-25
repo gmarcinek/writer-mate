@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParams, usePathname } from "next/navigation";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { ReaderSessionEvent } from "@/lib/reader/events";
 import {
   ReaderSessionStatus,
@@ -29,7 +31,7 @@ type CreateSessionResponse = {
   session: ReaderSession;
 };
 
-type EventLogCategory = "status" | "tool" | "thinking" | "note" | "handoff" | "error";
+type EventLogCategory = "status" | "tool" | "thinking" | "note" | "handoff" | "error" | "intent";
 
 type EventLogItem = {
   id: string;
@@ -39,8 +41,24 @@ type EventLogItem = {
   detail?: string;
 };
 
-const DEFAULT_PROMPT =
-  "Przeczytaj te książkę dokładnie od początku do końca i przygotuj precyzyjne podsumowanie dla bieżącej wersji.";
+const INTENT_LABELS: Record<string, string> = {
+  exhaustive_read: "Pełne czytanie",
+  question_answering: "Odpowiedź na pytanie",
+  targeted_extraction: "Ekstrakcja danych",
+  analysis: "Analiza tematyczna",
+  structure_survey: "Rozpoznanie struktury",
+};
+
+const TOOL_LABELS: Record<string, string> = {
+  readLines: "Czyta linie",
+  skipLines: "Pomija linie",
+  jumpToLine: "Skacze do linii",
+  jumpToGap: "Szuka luki w pokryciu",
+  searchPhrases: "Szuka fraz",
+  saveNotes: "Zapisuje notatkę",
+  finish: "Zamyka sesję",
+};
+
 const TERMINAL_STATUSES = new Set<ReaderSessionStatus>([
   ReaderSessionStatus.Complete,
   ReaderSessionStatus.Partial,
@@ -192,6 +210,14 @@ function createLogItem(event: ReaderSessionEvent): EventLogItem | null {
       return null;
     case "answer_chunk":
       return null;
+    case "intent_recognized":
+      return {
+        id: `${event.timestamp}-${event.type}`,
+        category: "intent",
+        timestamp: event.timestamp,
+        title: `Intencja: ${event.strategicGoal}`,
+        detail: event.intentType,
+      };
     default:
       return null;
   }
@@ -217,7 +243,6 @@ export default function EntitiesPanel() {
   const onBookPage = Boolean(bookId) && isBookPage(pathname);
   const eventSourceRef = useRef<EventSource | null>(null);
   const expandedLayerIdRef = useRef<string | null>(null);
-  const lastStreamedLayerIdRef = useRef<string | null>(null);
 
   const [layers, setLayers] = useState<ReaderSession[]>([]);
   const [masterHandoff, setMasterHandoff] = useState<ReaderMasterHandoff | null>(null);
@@ -226,16 +251,18 @@ export default function EntitiesPanel() {
   const [expandedArtifacts, setExpandedArtifacts] = useState<ReaderSessionArtifacts | null>(null);
   const [expandedArtifactsLoading, setExpandedArtifactsLoading] = useState(false);
   const [streamingLayerId, setStreamingLayerId] = useState<string | null>(null);
-  const [events, setEvents] = useState<EventLogItem[]>([]);
-  const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
+  const [layerEvents, setLayerEvents] = useState<Record<string, EventLogItem[]>>({});
+  const [layerAnswers, setLayerAnswers] = useState<Record<string, string>>({});
+  const [layerAnswerStreaming, setLayerAnswerStreaming] = useState<Record<string, boolean>>({});
+  const [prompt, setPrompt] = useState("");
   const [expandedThinking, setExpandedThinking] = useState<Set<string>>(() => new Set());
   const [artifactsDrawerOpen, setArtifactsDrawerOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [finalAnswer, setFinalAnswer] = useState("");
-  const [isStreamingAnswer, setIsStreamingAnswer] = useState(false);
+  const [layerIntents, setLayerIntents] = useState<Record<string, { intentType: string; strategicGoal: string; intermediateGoals: string[] }>>({});
+  const [activeToolName, setActiveToolName] = useState<string | null>(null);
 
   // Keep ref in sync with state so closures always have current value
   expandedLayerIdRef.current = expandedLayerId;
@@ -263,9 +290,11 @@ export default function EntitiesPanel() {
       setExpandedLayerIdSynced(null);
       setExpandedArtifacts(null);
       setStreamingLayerId(null);
-      setEvents([]);
-      setFinalAnswer("");
-      setIsStreamingAnswer(false);
+      setLayerEvents({});
+      setLayerAnswers({});
+      setLayerAnswerStreaming({});
+      setLayerIntents({});
+      setActiveToolName(null);
       setLoadError(null);
       setStreamError(null);
       setIsLoading(false);
@@ -287,9 +316,8 @@ export default function EntitiesPanel() {
 
         if (cancelled) return;
 
-        setLayers(data.sessions);
+        setLayers([...data.sessions].reverse());
         setMasterHandoff(data.masterHandoff);
-        setEvents([]);
 
         const activeSession = data.sessions.find((s) => !isTerminalStatus(s.status));
 
@@ -343,7 +371,7 @@ export default function EntitiesPanel() {
       cache: "no-store",
     });
     const data = await readJson<LayersResponse>(response);
-    setLayers(data.sessions);
+    setLayers([...data.sessions].reverse());
     setMasterHandoff(data.masterHandoff);
 
     if (expandedLayerIdRef.current === finishedSessionId) {
@@ -354,7 +382,10 @@ export default function EntitiesPanel() {
   function appendEvent(event: ReaderSessionEvent) {
     const item = createLogItem(event);
     if (!item) return;
-    setEvents((current) => [...current.slice(-79), item]);
+    setLayerEvents((current) => {
+      const prev = current[event.sessionId] ?? [];
+      return { ...current, [event.sessionId]: [...prev.slice(-79), item] };
+    });
   }
 
   function closeStream() {
@@ -368,9 +399,10 @@ export default function EntitiesPanel() {
     eventSourceRef.current = null;
     setStreamError(null);
     setStreamingLayerId(sessionId);
-    setFinalAnswer("");
-    setIsStreamingAnswer(false);
-    lastStreamedLayerIdRef.current = sessionId;
+    setLayerEvents((prev) => ({ ...prev, [sessionId]: [] }));
+    setLayerAnswers((prev) => ({ ...prev, [sessionId]: "" }));
+    setLayerAnswerStreaming((prev) => ({ ...prev, [sessionId]: false }));
+    setActiveToolName(null);
 
     // Auto-expand thinking section for the new stream
     setExpandedThinking((current) => {
@@ -390,12 +422,31 @@ export default function EntitiesPanel() {
       const payload = JSON.parse(rawEvent.data) as ReaderSessionEvent;
       appendEvent(payload);
 
+      if (payload.type === "intent_recognized") {
+        setLayerIntents((prev) => ({
+          ...prev,
+          [payload.sessionId]: {
+            intentType: payload.intentType,
+            strategicGoal: payload.strategicGoal,
+            intermediateGoals: payload.intermediateGoals,
+          },
+        }));
+        return;
+      }
+
+      if (payload.type === "tool_call") {
+        setActiveToolName(payload.toolName);
+      }
+      if (payload.type === "tool_result") {
+        setActiveToolName(null);
+      }
+
       if (payload.type === "answer_chunk") {
         if (payload.done) {
-          setIsStreamingAnswer(false);
+          setLayerAnswerStreaming((prev) => ({ ...prev, [sessionId]: false }));
         } else {
-          setIsStreamingAnswer(true);
-          setFinalAnswer((prev) => prev + payload.text);
+          setLayerAnswerStreaming((prev) => ({ ...prev, [sessionId]: true }));
+          setLayerAnswers((prev) => ({ ...prev, [sessionId]: (prev[sessionId] ?? "") + payload.text }));
         }
         return;
       }
@@ -425,6 +476,7 @@ export default function EntitiesPanel() {
       }
     };
 
+    source.addEventListener("intent_recognized", handleEvent as EventListener);
     source.addEventListener("answer_chunk", handleEvent as EventListener);
     source.addEventListener("status", handleEvent as EventListener);
     source.addEventListener("thinking", handleEvent as EventListener);
@@ -478,7 +530,6 @@ export default function EntitiesPanel() {
     setIsSubmitting(true);
     setLoadError(null);
     setStreamError(null);
-    setEvents([]);
 
     try {
       const response = await fetch(`/api/reader/books/${bookId}/session`, {
@@ -488,7 +539,7 @@ export default function EntitiesPanel() {
       });
       const data = await readJson<CreateSessionResponse>(response);
 
-      setLayers((current) => [data.session, ...current]);
+      setLayers((current) => [...current, data.session]);
       setExpandedLayerIdSynced(data.session.id);
       setExpandedArtifacts(null);
       openStream(data.session.id, 'gpt-5.5', bookId);
@@ -498,6 +549,9 @@ export default function EntitiesPanel() {
       setIsSubmitting(false);
     }
   }
+
+  const lineCount = prompt.split("\n").length;
+  const textareaRows = Math.min(Math.max(lineCount, 1), 20);
 
   if (!onBookPage) {
     return (
@@ -539,7 +593,8 @@ export default function EntitiesPanel() {
       </header>
 
       <div className={styles.chatArea}>
-        {masterHandoff && (
+        <div className={styles.conversationList}>
+          {masterHandoff && (
           <div className={styles.masterHandoffBubble}>
             <button
               type="button"
@@ -563,68 +618,97 @@ export default function EntitiesPanel() {
               <time className={styles.bubbleTime}>{formatTimestamp(layer.createdAt)}</time>
             </div>
 
-            {/* ASSISTANT BUBBLE */}
-            <div className={styles.assistantBubble}>
-              {/* Thinking toggle */}
-              <button
-                type="button"
-                className={styles.thinkingToggle}
-                onClick={() => toggleThinking(layer.id)}
-              >
-                <span className={styles.thinkingIcon}>🧠</span>
-                {streamingLayerId === layer.id
-                  ? `Process ⟳ ${events.length} events`
-                  : expandedArtifacts && expandedLayerId === layer.id
-                    ? `Reading ⟳ ${expandedArtifacts.notes.length} notatek`
-                    : "Process"
-                }
-                <span className={styles.thinkingArrow}>
-                  {expandedThinking.has(layer.id) ? "▲" : "▼"}
-                </span>
-              </button>
+            {/* ASSISTANT GROUP */}
+            <div className={styles.assistantWrapper}>
+              <time className={styles.assistantMeta}>{formatTimestamp(layer.createdAt)}</time>
 
-              {/* Thinking content */}
-              {expandedThinking.has(layer.id) && (
-                <div className={styles.thinkingContent}>
-                  {streamingLayerId === layer.id || lastStreamedLayerIdRef.current === layer.id ? (
-                    <ol className={styles.eventList}>
-                      {events.map((event) => (
-                        <li key={event.id} className={styles.eventItem} data-category={event.category}>
-                          <span className={styles.eventLabel}>{event.category}</span>
-                          <span className={styles.eventText}>{event.title}</span>
-                        </li>
-                      ))}
-                    </ol>
-                  ) : expandedArtifactsLoading && expandedLayerId === layer.id ? (
-                    <p className={styles.loadingText}>Ładowanie...</p>
-                  ) : expandedArtifacts && expandedLayerId === layer.id ? (
-                    <div className={styles.artifactsSummary}>
-                      <p className={styles.artifactsSummaryLine}>
-                        {expandedArtifacts.notes.length} notatek · status: {layer.status}
-                      </p>
-                    </div>
-                  ) : null}
-                </div>
-              )}
+              {/* ASSISTANT BUBBLE */}
+              <div className={styles.assistantBubble}>
+                {/* Intent badge */}
+                {layerIntents[layer.id] && (
+                  <div className={styles.intentBadge}>
+                    <span className={styles.intentTypeChip}>
+                      {INTENT_LABELS[layerIntents[layer.id].intentType] ?? layerIntents[layer.id].intentType}
+                    </span>
+                    <span className={styles.intentGoal}>{layerIntents[layer.id].strategicGoal}</span>
+                  </div>
+                )}
 
-              {/* Final answer */}
-              <div className={styles.finalAnswer}>
-                {finalAnswer && lastStreamedLayerIdRef.current === layer.id ? (
-                  <p className={styles.finalAnswerText}>
-                    {finalAnswer}
-                    {isStreamingAnswer && <span className={styles.streamingCursor}> ▋</span>}
-                  </p>
+                {/* Thinking toggle */}
+                <button
+                  type="button"
+                  className={styles.thinkingToggle}
+                  onClick={() => toggleThinking(layer.id)}
+                >
+                  <span className={styles.thinkingIcon}>🧠</span>
+                  {streamingLayerId === layer.id
+                    ? `${(layerEvents[layer.id] ?? []).length} zdarzeń`
+                    : expandedArtifacts && expandedLayerId === layer.id
+                      ? `${expandedArtifacts.notes.length} notatek`
+                      : "Proces"
+                  }
+                  <span className={styles.thinkingArrow}>
+                    {expandedThinking.has(layer.id) ? "▲" : "▼"}
+                  </span>
+                </button>
+
+                {/* Thinking content */}
+                {expandedThinking.has(layer.id) && (
+                  <div className={styles.thinkingContent}>
+                    {(streamingLayerId === layer.id || layerEvents[layer.id] !== undefined) ? (
+                      <ol className={styles.eventList}>
+                        {(layerEvents[layer.id] ?? []).map((event, i) => (
+                          <li key={`${event.id}-${i}`} className={styles.eventItem} data-category={event.category}>
+                            <span className={styles.eventLabel}>{event.category}</span>
+                            <span className={styles.eventText}>{event.title}</span>
+                          </li>
+                        ))}
+                        {activeToolName && streamingLayerId === layer.id && (
+                          <li className={styles.eventItem} data-category="tool">
+                            <span className={styles.eventLabel}>tool</span>
+                            <span className={styles.eventText}>
+                              {TOOL_LABELS[activeToolName] ?? activeToolName}
+                              <span className={styles.animDots} />
+                            </span>
+                          </li>
+                        )}
+                      </ol>
+                    ) : expandedArtifactsLoading && expandedLayerId === layer.id ? (
+                      <p className={styles.loadingText}>Ładowanie...</p>
+                    ) : expandedArtifacts && expandedLayerId === layer.id ? (
+                      <div className={styles.artifactsSummary}>
+                        <p className={styles.artifactsSummaryLine}>
+                          {expandedArtifacts.notes.length} notatek · status: {layer.status}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+
+                {/* Error */}
+                {streamingLayerId === layer.id && streamError && (
+                  <p className={styles.errorText}>{streamError}</p>
+                )}
+              </div>
+
+              {/* ANSWER BUBBLE */}
+              <div className={styles.answerBubble}>
+                {layerAnswers[layer.id] ? (
+                  <div className={styles.finalAnswerText}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{layerAnswers[layer.id]}</ReactMarkdown>
+                    {layerAnswerStreaming[layer.id] && <span className={styles.streamingCursor}> ▮</span>}
+                  </div>
                 ) : streamingLayerId === layer.id ? (
                   <p className={styles.streamingAnswer}>
-                    {events.filter((e) => e.category === "status").at(-1)?.title ?? "Trwa czytanie..."}
+                    {(layerEvents[layer.id] ?? []).filter((e) => e.category === "status").at(-1)?.title ?? "Trwa czytanie..."}
                   </p>
                 ) : !isTerminalStatus(layer.status) ? (
                   <p className={styles.loadingText}>Oczekuje na zakończenie...</p>
-                ) : expandedArtifacts?.handoff && expandedLayerId === layer.id && !lastStreamedLayerIdRef.current ? (
-                  <p className={styles.finalAnswerText}>
-                    {expandedArtifacts.handoff.executiveSummary}
-                  </p>
-                ) : expandedArtifacts && expandedLayerId === layer.id && !expandedArtifacts.handoff && !lastStreamedLayerIdRef.current ? (
+                ) : expandedArtifacts?.handoff && expandedLayerId === layer.id ? (
+                  <div className={styles.finalAnswerText}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{expandedArtifacts.handoff.executiveSummary}</ReactMarkdown>
+                  </div>
+                ) : expandedArtifacts && expandedLayerId === layer.id && !expandedArtifacts.handoff ? (
                   <p className={styles.loadingText}>Sesja zakończona bez pełnej analizy.</p>
                 ) : layer.id === expandedLayerId ? null : (
                   <button
@@ -636,11 +720,6 @@ export default function EntitiesPanel() {
                   </button>
                 )}
               </div>
-
-              {/* Error */}
-              {streamingLayerId === layer.id && streamError && (
-                <p className={styles.errorText}>{streamError}</p>
-              )}
             </div>
           </div>
         ))}
@@ -650,33 +729,36 @@ export default function EntitiesPanel() {
             <p>Brak warstw czytania. Dodaj pierwsze czytanie.</p>
           </div>
         )}
-      </div>
+        </div>
 
-      <div className={styles.inputArea}>
-        {loadError && <p className={styles.errorText}>{loadError}</p>}
-        <div className={styles.inputWrap}>
-          <textarea
-            className={styles.promptInput}
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Cel czytania..."
-            rows={2}
-            disabled={isSubmitting || Boolean(streamingLayerId)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void handleStartSession();
-              }
-            }}
-          />
-          <button
-            type="button"
-            className={styles.sendButton}
-            onClick={() => void handleStartSession()}
-            disabled={isSubmitting || prompt.trim().length === 0 || Boolean(streamingLayerId)}
-          >
-            {isSubmitting ? "..." : "^"}
-          </button>
+        <div className={styles.floatingInput}>
+          {loadError && <p className={styles.errorText}>{loadError}</p>}
+          <div className={styles.inputWrap}>
+            <textarea
+              className={`${styles.promptInput}${lineCount <= 1 ? ` ${styles.promptInputCentered}` : ""}`}
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="Co analizujemy? Wprowadź cel czytania, pytanie lub instrukcję dla czytelnika..."
+              rows={textareaRows}
+              disabled={isSubmitting || Boolean(streamingLayerId)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  if (lineCount <= 1) {
+                    e.preventDefault();
+                    void handleStartSession();
+                  }
+                }
+              }}
+            />
+            <button
+              type="button"
+              className={styles.sendButton}
+              onClick={() => void handleStartSession()}
+              disabled={isSubmitting || prompt.trim().length === 0 || Boolean(streamingLayerId)}
+            >
+              {isSubmitting ? "Wysyłanie..." : "Wyślij"}
+            </button>
+          </div>
         </div>
       </div>
 

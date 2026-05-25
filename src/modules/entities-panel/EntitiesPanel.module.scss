@@ -45,14 +45,24 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 16px;
+}
+
+.conversationList {
+  max-width: 780px;
+  margin-inline: auto;
+  width: 100%;
+  padding: 0px 0% 160px;
   display: flex;
   flex-direction: column;
   gap: 20px;
 }
 
+/* .chatAreaNarrow / .chatAreaFlex reserved for future mode switching */
+
 .conversationPair {
   display: flex;
+  max-width: 780px;
+  min-width: 100%;
   flex-direction: column;
   gap: 8px;
 }
@@ -60,7 +70,7 @@
 /* === Bubbles === */
 .userBubble {
   align-self: flex-end;
-  max-width: 85%;
+  max-width: 80%;
   background: var(--color-accent);
   color: #fff;
   border-radius: 16px 16px 4px 16px;
@@ -82,12 +92,27 @@
 }
 
 .assistantBubble {
-  align-self: flex-start;
   width: 100%;
   border: 1px solid var(--color-border);
   border-radius: 4px 16px 16px 16px;
   background: color-mix(in srgb, var(--color-surface) 96%, transparent);
   overflow: hidden;
+}
+
+.assistantWrapper {
+  align-self: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 100%;
+  max-width: 100%;
+}
+
+.assistantMeta {
+  display: block;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  padding: 0 4px;
 }
 
 /* === Thinking === */
@@ -184,6 +209,34 @@
   font-size: 13px;
   line-height: 1.65;
   color: var(--color-text);
+
+  > :first-child { margin-top: 0; }
+  > :last-child  { margin-bottom: 0; }
+
+  h1, h2, h3, h4 {
+    font-size: 13px;
+    font-weight: 600;
+    margin: 0.9em 0 0.3em;
+    color: var(--color-text);
+  }
+
+  p { margin: 0 0 0.5em; }
+
+  ul, ol {
+    margin: 0.3em 0 0.5em;
+    padding-left: 1.4em;
+  }
+
+  li { margin: 0.15em 0; }
+
+  strong { font-weight: 600; }
+
+  code {
+    font-size: 11.5px;
+    background: var(--color-surface-alt, rgba(0,0,0,.06));
+    border-radius: 3px;
+    padding: 0 3px;
+  }
 }
 
 .streamingAnswer {
@@ -223,6 +276,76 @@
   color: var(--color-text-muted);
 }
 
+/* === Intent badge === */
+.intentBadge {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 4%, var(--color-surface));
+}
+
+.intentTypeChip {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--color-accent) 15%, transparent);
+  color: var(--color-accent);
+}
+
+.intentGoal {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* === Active tool animated dots === */
+@keyframes dots {
+  0%, 20%   { content: '.'; }
+  40%        { content: '..'; }
+  60%, 100%  { content: '...'; }
+}
+
+.animDots::after {
+  content: '.';
+  animation: dots 1.4s infinite;
+}
+
+/* === Event log intent category === */
+.eventItem[data-category="intent"] .eventLabel {
+  background: color-mix(in srgb, #4a90d9 12%, transparent);
+  color: #1a5a9e;
+}
+
+/* === Answer bubble (separate from assistant bubble) === */
+.answerBubble {
+  width: 100%;
+  background: #ffffff;
+  border: none;
+  border-radius: 4px 16px 16px 16px;
+  padding: 10px 14px 12px;
+}
+
+.answerBubble:empty {
+  display: none;
+}
+
+.answerBubble .finalAnswerText {
+  color: #111;
+}
+
+.answerBubble .streamingAnswer,
+.answerBubble .loadingText {
+  color: #666;
+}
+
 /* === Master Handoff bubble === */
 .masterHandoffBubble {
   border: 1px solid color-mix(in srgb, var(--color-accent) 30%, var(--color-border));
@@ -258,20 +381,28 @@
   margin: 10px 0 0;
 }
 
-/* === Input area === */
-.inputArea {
-  flex-shrink: 0;
-  padding: 8px 12px 12px;
-  border-top: 1px solid var(--color-border);
+/* === Floating input === */
+.floatingInput {
+  position: sticky;
+  bottom: 0;
+  padding: 12px 16px 20px;
+  z-index: 10;
+  max-width: 780px;
+  margin-inline: auto;
+  width: 100%;
 }
 
 .inputWrap {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  background: #111;
-  border-radius: 12px;
-  padding: 8px 8px 8px 14px;
+  background: #141414;
+  border-radius: 18px;
+  padding: 10px 10px 10px 16px;
+  box-shadow:
+    0 12px 64px 12px rgba(0, 0, 0, 0.45),
+    0 4px 24px rgba(0, 0, 0, 0.3),
+    0 1px 4px rgba(0, 0, 0, 0.2);
 }
 
 .promptInput {
@@ -280,11 +411,16 @@
   border: none;
   color: #fff;
   font: inherit;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 2.5;
   resize: none;
   outline: none;
-  min-height: 36px;
+  min-height: 24px;
+  overflow-y: auto;
+}
+
+.promptInputCentered {
+  text-align: center;
 }
 
 .promptInput::placeholder {
@@ -297,18 +433,17 @@
 
 .sendButton {
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+  padding: 0 14px;
+  height: 36px;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--color-accent);
   color: #fff;
-  font-size: 16px;
-  font-weight: 700;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  white-space: nowrap;
   transition: opacity 160ms;
 }
 

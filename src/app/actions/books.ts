@@ -20,7 +20,7 @@ const TEXT_EXTENSIONS = new Set([".txt", ".md"]);
 const INITIAL_EXHAUSTIVE_READER_GOAL = {
   mode: ReaderMode.Exhaustive,
   prompt:
-    "Read this source exhaustively from beginning to end and produce the initial baseline handoff for the full book.",
+    "Przeczytaj ten materiał dokładnie od początku do końca i przygotuj początkowy raport podsumowujący dla całego dokumentu. Czytaj dużymi porcjami max 3000 linii, minimum 200 linii.",
   requiredCoverage: {
     minimumLineCoveragePercent: 100,
     requireEndToEndRead: true,

@@ -122,6 +122,15 @@ export async function runReaderOrchestration(
       model: context.model,
     });
 
+    await emit?.(
+      createReaderSessionEvent("intent_recognized", sessionId, {
+        intentType: intent.intentType,
+        strategicGoal: intent.strategicGoal,
+        intermediateGoals: intent.intermediateGoals,
+        focusAreas: intent.focusAreas,
+      })
+    );
+
     const toolRuntime = await createReaderTools({
       session: currentSession,
       recon: context.recon,
@@ -180,6 +189,14 @@ export async function runReaderOrchestration(
 
     // If the model called finish() during the reading loop, synthesis already ran inside finish.execute
     if (isTerminalStatus(sessionAfterReading.status)) {
+      await streamFinalAnswer({
+        sessionId,
+        model: context.model,
+        emit,
+        handoff: artifactsAfterReading.handoff,
+        session: sessionAfterReading,
+      });
+
       await emit?.(
         createReaderSessionEvent("status", sessionId, {
           status: sessionAfterReading.status,
@@ -188,14 +205,6 @@ export async function runReaderOrchestration(
           startedNewSession: context.startedNewSession,
         })
       );
-
-      await streamFinalAnswer({
-        sessionId,
-        model: context.model,
-        emit,
-        handoff: artifactsAfterReading.handoff,
-        session: sessionAfterReading,
-      });
 
       return {
         session: sessionAfterReading,
@@ -329,6 +338,14 @@ export async function runReaderOrchestration(
       throw new Error("Reader session missing after finish");
     }
 
+    await streamFinalAnswer({
+      sessionId,
+      model: context.model,
+      emit,
+      handoff: finalArtifacts.handoff ?? handoff,
+      session: finalArtifacts.session,
+    });
+
     await emit?.(
       createReaderSessionEvent("status", sessionId, {
         status: finalArtifacts.session.status,
@@ -337,14 +354,6 @@ export async function runReaderOrchestration(
         startedNewSession: context.startedNewSession,
       })
     );
-
-    await streamFinalAnswer({
-      sessionId,
-      model: context.model,
-      emit,
-      handoff: finalArtifacts.handoff ?? handoff,
-      session: finalArtifacts.session,
-    });
 
     return {
       session: finalArtifacts.session,
