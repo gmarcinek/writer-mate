@@ -582,6 +582,35 @@ export async function getReaderHandoff(
   return row ? mapHandoff(row) : null;
 }
 
+export async function insertCoverageRange(input: {
+  sessionId: string;
+  source: ReaderSourceRef;
+  startLine: number;
+  endLine: number;
+  startOffset?: number | null;
+  endOffset?: number | null;
+  disposition: ReaderCoverageDisposition;
+  reason: ReaderCoverageReason;
+  toolName?: string;
+}): Promise<void> {
+  if (input.startLine > input.endLine) return;
+
+  await db.insert(readerCoverageRanges).values({
+    sessionId: input.sessionId,
+    noteId: null,
+    handoffId: null,
+    ...serializeSource(input.source),
+    startLine: input.startLine,
+    endLine: input.endLine,
+    startOffset: input.startOffset ?? null,
+    endOffset: input.endOffset ?? null,
+    disposition: input.disposition,
+    reason: input.reason,
+    toolName: input.toolName ?? null,
+    recordedAt: new Date(),
+  });
+}
+
 export async function replaceReaderCoverageRanges(
   input: ReplaceReaderCoverageRangesInput
 ): Promise<ReaderCoverageRange[]> {

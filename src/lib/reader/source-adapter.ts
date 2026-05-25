@@ -31,7 +31,7 @@ type ReaderBookSourceReadRow = ReaderBookSourceMetadataRow & {
   text: string;
 };
 
-const MAX_READ_LINES = 200;
+const MAX_READ_LINES = 3000;
 const MAX_READ_SLICE_CHARACTERS = 12_000;
 
 export interface ReaderSourceMetadata {

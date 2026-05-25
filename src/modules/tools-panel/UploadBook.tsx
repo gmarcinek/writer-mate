@@ -1,18 +1,23 @@
 ﻿"use client";
 
 import { useTransition, useRef } from "react";
+import { useRouter, useParams } from "next/navigation";
 import { uploadBook } from "@/app/actions/books";
 
 export default function UploadBook() {
   const [isPending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
+  const router = useRouter();
+  const params = useParams<{ locale?: string }>();
+  const locale = params.locale ?? "pl";
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     startTransition(async () => {
-      await uploadBook(formData);
+      const result = await uploadBook(formData);
       formRef.current?.reset();
+      router.push(`/${locale}/books/${result.id}`);
     });
   }
 

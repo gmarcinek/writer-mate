@@ -1,19 +1,24 @@
 ﻿"use client";
 
 import { useTransition, useRef, useState } from "react";
+import { useRouter, useParams } from "next/navigation";
 import { uploadBook } from "@/app/actions/books";
 
 export default function NewProjectModal({ onClose }: { onClose: () => void }) {
   const [isPending, startTransition] = useTransition();
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
+  const params = useParams<{ locale?: string }>();
+  const locale = params.locale ?? "pl";
 
   function processFile(file: File) {
     const formData = new FormData();
     formData.append("file", file);
     startTransition(async () => {
-      await uploadBook(formData);
+      const result = await uploadBook(formData);
       onClose();
+      router.push(`/${locale}/books/${result.id}`);
     });
   }
 

@@ -9,9 +9,7 @@ import {
   updateReaderSession,
 } from "@/lib/reader/persistence";
 import {
-  ReaderCheckpointKind,
   ReaderCoverageDisposition,
-  ReaderCoverageReason,
   ReaderEvidenceKind,
   ReaderHandoffStatus,
   ReaderNoteStatus,
@@ -82,43 +80,6 @@ const evidenceSchema = z.object({
   capturedViaTool: z.string().optional(),
 });
 
-const noteCoverageSchema = z
-  .object({
-    ...lineRangeShape,
-    startOffset: z.number().int().min(0).optional(),
-    endOffset: z.number().int().min(0).optional(),
-    source: sourceRefSchema,
-    disposition: z.nativeEnum(ReaderCoverageDisposition),
-    reason: z.nativeEnum(ReaderCoverageReason),
-    toolName: z.string().optional(),
-    recordedAt: z.string().datetime().optional(),
-  })
-  .refine((value) => value.startLine <= value.endLine, {
-    message: "startLine must be <= endLine",
-  });
-
-const checkpointSchema = z.object({
-  kind: z.nativeEnum(ReaderCheckpointKind),
-  readSummary: z.string().min(1),
-  skippedSummary: z.string().min(1),
-  remainingGapsSummary: z.string().min(1),
-  readRanges: z.array(lineRangeSchema),
-  skippedRanges: z.array(lineRangeSchema),
-  remainingGapRanges: z.array(lineRangeSchema),
-});
-
-const finalCheckpointSchema = checkpointSchema.refine(
-  (checkpoint) =>
-    checkpoint.kind !== ReaderCheckpointKind.Final ||
-    (checkpoint.readRanges.length > 0 &&
-      checkpoint.skippedRanges.length > 0 &&
-      checkpoint.remainingGapRanges.length > 0),
-  {
-    message:
-      "Final checkpoints must include non-empty readRanges, skippedRanges, and remainingGapRanges",
-  }
-);
-
 const saveNotesSchema = z.object({
   sessionId: z.string().uuid(),
   noteId: z.string().uuid().optional(),
@@ -130,8 +91,6 @@ const saveNotesSchema = z.object({
   unresolvedQuestions: z.array(z.string()),
   followUpActions: z.array(z.string()),
   evidence: z.array(evidenceSchema),
-  checkpoint: checkpointSchema.optional(),
-  coverage: z.array(noteCoverageSchema).min(1),
   savedAt: z.union([z.date(), z.string().datetime()]).optional(),
 });
 
@@ -146,7 +105,6 @@ export type SaveNotesResult = {
   sessionId: string;
   noteId: string;
   savedAt: string;
-  coverageRangesSaved: number;
 };
 
 export type FinishInput = z.input<typeof finishSchema>;
@@ -172,10 +130,6 @@ function toSessionStatus(status: ReaderHandoffStatus) {
     : ReaderSessionStatus.Partial;
 }
 
-function assertFinalCheckpoint(checkpoint: unknown) {
-  return finalCheckpointSchema.parse(checkpoint);
-}
-
 export async function saveNotes(input: SaveNotesInput): Promise<SaveNotesResult> {
   const parsed = saveNotesSchema.parse(input);
   const session = await getReaderSession(parsed.sessionId);
@@ -195,13 +149,7 @@ export async function saveNotes(input: SaveNotesInput): Promise<SaveNotesResult>
     unresolvedQuestions: parsed.unresolvedQuestions,
     followUpActions: parsed.followUpActions,
     evidence: parsed.evidence as ReaderEvidenceMetadata[],
-    checkpoint: parsed.checkpoint,
-    coverage: parsed.coverage.map((range) => ({
-      ...range,
-      sessionId: parsed.sessionId,
-      noteId: parsed.noteId ?? null,
-      handoffId: null,
-    })),
+    coverage: [],
     createdAt: toDate(parsed.savedAt),
     updatedAt: toDate(parsed.savedAt),
   });
@@ -210,7 +158,6 @@ export async function saveNotes(input: SaveNotesInput): Promise<SaveNotesResult>
     sessionId: parsed.sessionId,
     noteId: note.id,
     savedAt: note.updatedAt,
-    coverageRangesSaved: note.coverage.length,
   };
 }
 
@@ -237,14 +184,6 @@ export async function finish(input: FinishInput): Promise<FinishResult> {
   if (!lastNote) {
     throw new Error("Reader finish requires at least one persisted note");
   }
-
-  if (lastNote.checkpoint?.kind !== ReaderCheckpointKind.Final) {
-    throw new Error(
-      "Reader finish requires the latest note to include an explicit final checkpoint"
-    );
-  }
-
-  assertFinalCheckpoint(lastNote.checkpoint);
 
   const terminalState = await updateReaderSession({
     sessionId: parsed.sessionId,

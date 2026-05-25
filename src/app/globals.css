@@ -59,7 +59,7 @@ body {
   }
 
   .app-shell[data-sidebar-hidden="true"] {
-    grid-template-columns: 320px minmax(0, 1fr);
+    grid-template-columns: 480px minmax(0, 1fr);
   }
 }
 

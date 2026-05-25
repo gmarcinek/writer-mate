@@ -1,12 +1,9 @@
 import {
-  ReaderCheckpointKind,
   ReaderMode,
   type ReaderGoal,
   type ReaderReconBrief,
   type ReaderSession,
 } from "@/lib/reader/types";
-
-export const READER_SYNTHESIS_READY_SENTINEL = "READER_SYNTHESIS_READY";
 
 function formatGoal(goal: ReaderGoal) {
   const lines = [
@@ -59,17 +56,26 @@ function formatRecon(recon: ReaderReconBrief) {
 export function buildReaderSystemPrompt() {
   return [
     "You are the server-owned exhaustive reader for writer-mate.",
-    "Read the source exhaustively first. Prefer sequential traversal unless recon strongly indicates a better bounded jump.",
+    "Read the source exhaustively. Prefer sequential traversal unless recon strongly indicates a better bounded jump.",
     "Use tools instead of inventing source content.",
-    "Persist structured notes with evidence and coverage as you progress.",
-    "When the reading pass is complete, save a final note with checkpoint.kind='final' and non-empty readRanges, skippedRanges, and remainingGapRanges.",
-    `After the final checkpoint is saved, reply with the exact text ${READER_SYNTHESIS_READY_SENTINEL}. Do not call finish until the server explicitly re-prompts you for closure.`,
+    "Persist structured notes with evidence as you progress.",
+    "Write all note content (summary, facts, inferences, questions, actions) in the same language as the source text.",
+    "When you have finished reading, call finish() to close the session.",
+    "Adaptive chunk sizes: start every new session with readLines windows of 100 lines. After each successful read, you may double the window size. Maximum chunk size is 3000 lines per readLines call.",
     "Treat facts as directly supported by evidence. Put uncertainty into inferences, unresolvedQuestions, caveats, or limitations.",
-    "If you skip lines, mark them explicitly in coverage and summarize why.",
+    "Note markers — prefix every entry: facts with [FAKT], inferences with [HIPOTEZA] (speculation, hypothesis) or [INTERPRETACJA] (interpretive/literary reading) as appropriate.",
+    "Fragment meta-impression — begin every note summary with a compact one-liner describing the fragment's character, e.g.: 'L102-145: nastrój=melancholijny, klimat=napięty, emocje=7/10, gęstość=wysoka.' Then continue with the substantive summary.",
     "Use searchPhrases for lexical discovery and jumpToGap when you need to revisit persisted unvisited ranges.",
     "For tool calls, include every parameter key required by the schema. When a value is not used, pass null instead of omitting the key.",
-    "When calling saveNotes for a new note, set noteId to null. Always include a non-empty coverage array aligned with the evidence ranges.",
-    "Do not produce markdown fences or prose outside tool usage unless you are explicitly returning the synthesis-ready sentinel.",
+    "When calling saveNotes for a new note, set noteId to null.",
+    "Keep each saveNotes payload compact.",
+    "Use at most: summary under 800 chars, up to 8 facts, 6 inferences, 5 unresolved questions, 5 follow-up actions, and 4 evidence items.",
+    "For saveNotes evidence, prefer anchor ranges over long quotations.",
+    "Set evidence.quote to null unless a short literal excerpt is essential.",
+    "If you include evidence.quote, keep it to a single line, plain text only, with no raw newlines, and keep it short.",
+    "Do not paste large source passages into tool arguments.",
+    "If the note would be too large, save a smaller interim note now and continue reading.",
+    "Do not produce markdown fences or prose outside tool usage.",
   ].join("\n");
 }
 
@@ -96,10 +102,11 @@ export function buildReaderRunPrompt(args: {
     "Reconnaissance:",
     formatRecon(args.recon),
     "Operational rules:",
-    "1. Read bounded windows and advance coverage deliberately.",
+    "1. Read bounded windows and advance coverage deliberately. Start with 100-line chunks; double the window after each successful read up to a maximum of 3000 lines per call.",
     "2. Save interim notes whenever you complete a meaningful span or section.",
-    "3. Before concluding, persist one final note with a final checkpoint.",
-    `4. Once that final checkpoint is safely persisted, respond with ${READER_SYNTHESIS_READY_SENTINEL}.`,
+    "3. When you have finished reading everything, call finish() to close the session.",
+    "4. Keep saveNotes payloads compact. Prefer evidence ranges plus short factual anchors over long quoted excerpts.",
+    "5. If a note grows too large, split it into multiple smaller notes instead of sending one large saveNotes call.",
   ].join("\n\n");
 }
 
@@ -111,10 +118,12 @@ export function buildReaderSynthesisPrompt(args: {
 }) {
   return [
     "Synthesize a final reader handoff from the persisted notes.",
+    "Write all handoff content (executiveSummary, conclusions, gaps, caveats, limitations, nextQuestions) in the same language as the source text.",
     "Return strict JSON only. No markdown fences, no commentary.",
     "The JSON must contain: status, executiveSummary, conclusions, gaps, caveats, limitations, nextQuestions.",
     "Each conclusion must contain: title, summary, statementKind, confidence, evidenceIds.",
-    "Choose status='complete' only when the persisted checkpoint and coverage support an exhaustive formal end. Otherwise choose 'partial'.",
+    "In conclusion summaries, preserve the [FAKT] / [HIPOTEZA] / [INTERPRETACJA] markers when referencing specific claims from the notes.",
+    "Choose status='complete' only when the coverage digest shows high visitedPercent and no significant unvisited ranges remain. Otherwise choose 'partial'.",
     "Session goal:",
     formatGoal(args.session.goal),
     "Recon summary:",
@@ -133,5 +142,3 @@ export function buildReaderFinishPrompt(sessionId: string) {
     "Do not emit any prose. Do not call any other tool.",
   ].join("\n");
 }
-
-export const READER_FINAL_CHECKPOINT_KIND = ReaderCheckpointKind.Final;

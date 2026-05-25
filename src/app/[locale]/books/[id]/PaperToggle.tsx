@@ -279,6 +279,25 @@ export default function PaperToggle({
                           {...props}
                         />
                       ),
+                      img: ({ node: _node, src, alt, ...props }) => {
+                        if (typeof src !== "string" || src.trim().length === 0) {
+                          return null;
+                        }
+
+                        return (
+                          <img
+                            src={src}
+                            alt={alt ?? ""}
+                            style={{
+                              display: "block",
+                              maxWidth: "100%",
+                              height: "auto",
+                              margin: "0 0 1rem",
+                            }}
+                            {...props}
+                          />
+                        );
+                      },
                       th: ({ node: _node, ...props }) => (
                         <th
                           style={{ border: "1px solid #dedede", padding: "0.55rem", textAlign: "left" }}

@@ -549,10 +549,14 @@ export default function EntitiesPanel() {
                   <span className={styles.eventCategory} data-category={item.category}>
                     {item.category}
                   </span>
-                  <time>{formatTimestamp(item.timestamp)}</time>
+                  <time className={styles.eventTimestamp}>{formatTimestamp(item.timestamp)}</time>
                 </div>
                 <p className={styles.eventTitle}>{item.title}</p>
-                {item.detail ? <p className={styles.eventDetail}>{item.detail}</p> : null}
+                {item.detail ? (
+                  <pre className={styles.eventDetail} data-category={item.category}>
+                    {item.detail}
+                  </pre>
+                ) : null}
               </li>
             ))}
           </ol>

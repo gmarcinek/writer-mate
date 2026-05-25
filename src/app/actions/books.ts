@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { runReaderOrchestration } from "@/lib/reader/orchestration";
-import { ReaderMode, ReaderSourceType, type ReaderGoal } from "@/lib/reader/types";
+import { createReaderSession } from "@/lib/reader/persistence";
+import { ReaderMode, ReaderSourceType, ReaderSessionStatus, type ReaderGoal } from "@/lib/reader/types";
 import { books } from "@/lib/schema";
 
 export type BookItem = {
@@ -30,11 +30,7 @@ const INITIAL_EXHAUSTIVE_READER_GOAL = {
 export type UploadBookResult = {
   id: string;
   title: string;
-  readerSession: {
-    id: string;
-    status: string;
-    startedNewSession: boolean;
-  };
+  sessionId: string;
 };
 
 async function toMarkdown(file: File): Promise<string> {
@@ -80,10 +76,7 @@ export async function uploadBook(
     .values({ title, fileOriginalName: file.name, rawContent, status: "ready" })
     .returning({ id: books.id, title: books.title });
 
-  revalidatePath("/pl");
-  revalidatePath("/en");
-
-  const readerResult = await runReaderOrchestration({
+  const session = await createReaderSession({
     source: {
       sourceId: inserted.id,
       sourceType: ReaderSourceType.BookRawContent,
@@ -91,15 +84,16 @@ export async function uploadBook(
       bookId: inserted.id,
     },
     goal: INITIAL_EXHAUSTIVE_READER_GOAL,
+    status: ReaderSessionStatus.Recon,
+    reconSummary: undefined,
   });
+
+  revalidatePath("/pl");
+  revalidatePath("/en");
 
   return {
     ...inserted,
-    readerSession: {
-      id: readerResult.session.id,
-      status: readerResult.session.status,
-      startedNewSession: readerResult.startedNewSession,
-    },
+    sessionId: session.id,
   };
 }
 

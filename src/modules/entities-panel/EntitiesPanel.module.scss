@@ -181,7 +181,7 @@
 .chatList {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
   height: 100%;
   margin: 0;
   padding: 14px;
@@ -190,33 +190,24 @@
 }
 
 .chatMessage {
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  padding: 12px 14px;
-  background: color-mix(in srgb, var(--color-surface) 90%, transparent);
-}
-
-.chatMessage[data-kind="handoff"] {
-  border-color: color-mix(in srgb, var(--color-accent) 35%, var(--color-border));
-  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-accent) 8%);
+  padding: 10px 0 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
 }
 
 .chatMetaRow {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   margin-bottom: 6px;
-  font-size: 11px;
-  color: var(--color-text-muted);
 }
 
 .eventCategory {
-  border-radius: 999px;
-  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  background: color-mix(in srgb, var(--color-border) 60%, transparent);
+  color: var(--color-text);
 }
 
 .eventCategory[data-category="error"] {
@@ -225,6 +216,12 @@
 
 .eventCategory[data-category="handoff"] {
   color: var(--color-accent);
+}
+
+.eventTimestamp {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
 }
 
 .eventTitle,
@@ -238,7 +235,7 @@
 
 .eventTitle {
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .eventDetail,
@@ -248,6 +245,15 @@
   font-size: 12px;
   line-height: 1.5;
   color: var(--color-text-muted);
+}
+
+.eventDetail {
+  white-space: pre-wrap;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+.eventDetail[data-category="tool"] {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
 .errorText {

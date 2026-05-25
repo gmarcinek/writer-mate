@@ -20,13 +20,12 @@ import {
   buildReaderRunPrompt,
   buildReaderSynthesisPrompt,
   buildReaderSystemPrompt,
-  READER_FINAL_CHECKPOINT_KIND,
-  READER_SYNTHESIS_READY_SENTINEL,
 } from "@/lib/reader/orchestration-prompt";
 import {
   createReaderSession,
   getReaderSessionArtifacts,
   getReaderSession,
+  insertCoverageRange,
   saveReaderHandoff,
   updateReaderSession,
 } from "@/lib/reader/persistence";
@@ -36,7 +35,6 @@ import {
 } from "@/lib/reader/events";
 import { runReaderReconnaissance } from "@/lib/reader/reconnaissance";
 import {
-  ReaderCheckpointKind,
   ReaderCoverageDisposition,
   ReaderCoverageReason,
   ReaderEvidenceKind,
@@ -45,6 +43,7 @@ import {
   ReaderNoteStatus,
   ReaderSessionStatus,
   ReaderSourceType,
+  ReaderStatementKind,
   type ReaderCoverageRange,
   type ReaderCoverageSummary,
   type ReaderEvidenceMetadata,
@@ -54,7 +53,6 @@ import {
   type ReaderNote,
   type ReaderSession,
   type ReaderSourceRef,
-  ReaderStatementKind,
 } from "@/lib/reader/types";
 
 const DEFAULT_READER_MODEL = "gpt-4.1-mini";
@@ -163,10 +161,10 @@ const evidenceSchema = z.object({
   kind: z.nativeEnum(ReaderEvidenceKind),
   statementKind: z.nativeEnum(ReaderStatementKind),
   coverageDisposition: z.nativeEnum(ReaderCoverageDisposition),
-  quote: z.string().optional(),
-  note: z.string().optional(),
+  quote: z.string().max(240).optional(),
+  note: z.string().max(240).optional(),
   confidence: z.number().min(0).max(1).optional(),
-  capturedViaTool: z.string().optional(),
+  capturedViaTool: z.string().max(64).optional(),
 });
 
 const toolEvidenceSchema = z.object({
@@ -176,80 +174,32 @@ const toolEvidenceSchema = z.object({
   kind: z.nativeEnum(ReaderEvidenceKind),
   statementKind: z.nativeEnum(ReaderStatementKind),
   coverageDisposition: z.nativeEnum(ReaderCoverageDisposition),
-  quote: z.string().nullable(),
-  note: z.string().nullable(),
+  quote: z.string().max(240).nullable(),
+  note: z.string().max(240).nullable(),
   confidence: z.number().min(0).max(1).nullable(),
-  capturedViaTool: z.string().nullable(),
-});
-
-const noteCoverageSchema = lineRangeBaseSchema.extend({
-  startOffset: z.number().int().min(0).optional(),
-  endOffset: z.number().int().min(0).optional(),
-  source: sourceRefSchema,
-  disposition: z.nativeEnum(ReaderCoverageDisposition),
-  reason: z.nativeEnum(ReaderCoverageReason),
-  toolName: z.string().optional(),
-  recordedAt: z.string().datetime().optional(),
-}).refine((value) => value.startLine <= value.endLine, {
-  message: "startLine must be <= endLine",
-});
-
-const toolNoteCoverageSchema = lineRangeBaseSchema.extend({
-  startOffset: z.number().int().min(0).nullable(),
-  endOffset: z.number().int().min(0).nullable(),
-  source: toolSourceRefSchema,
-  disposition: z.nativeEnum(ReaderCoverageDisposition),
-  reason: z.nativeEnum(ReaderCoverageReason),
-  toolName: z.string().nullable(),
-  recordedAt: z.string().datetime().nullable(),
-}).refine((value) => value.startLine <= value.endLine, {
-  message: "startLine must be <= endLine",
-});
-
-const checkpointSchema = z.object({
-  kind: z.nativeEnum(ReaderCheckpointKind),
-  readSummary: z.string().min(1),
-  skippedSummary: z.string().min(1),
-  remainingGapsSummary: z.string().min(1),
-  readRanges: z.array(lineRangeSchema),
-  skippedRanges: z.array(lineRangeSchema),
-  remainingGapRanges: z.array(lineRangeSchema),
-});
-
-const toolCheckpointSchema = z.object({
-  kind: z.nativeEnum(ReaderCheckpointKind),
-  readSummary: z.string().min(1),
-  skippedSummary: z.string().min(1),
-  remainingGapsSummary: z.string().min(1),
-  readRanges: z.array(lineRangeSchema),
-  skippedRanges: z.array(lineRangeSchema),
-  remainingGapRanges: z.array(lineRangeSchema),
+  capturedViaTool: z.string().max(64).nullable(),
 });
 
 const noteToolSchema = z.object({
   noteId: z.string().uuid().optional(),
   status: z.nativeEnum(ReaderNoteStatus),
-  summary: z.string().min(1),
-  facts: z.array(z.string()),
-  inferences: z.array(z.string()),
-  unresolvedQuestions: z.array(z.string()),
-  followUpActions: z.array(z.string()),
-  evidence: z.array(evidenceSchema),
-  checkpoint: checkpointSchema.optional(),
-  coverage: z.array(noteCoverageSchema).min(1),
+  summary: z.string().min(1).max(800),
+  facts: z.array(z.string().max(240)).max(8),
+  inferences: z.array(z.string().max(240)).max(6),
+  unresolvedQuestions: z.array(z.string().max(240)).max(5),
+  followUpActions: z.array(z.string().max(240)).max(5),
+  evidence: z.array(evidenceSchema).max(4),
 });
 
 const toolNoteToolSchema = z.object({
   noteId: z.string().nullable(),
   status: z.nativeEnum(ReaderNoteStatus),
-  summary: z.string().min(1),
-  facts: z.array(z.string()),
-  inferences: z.array(z.string()),
-  unresolvedQuestions: z.array(z.string()),
-  followUpActions: z.array(z.string()),
-  evidence: z.array(toolEvidenceSchema),
-  checkpoint: toolCheckpointSchema.nullable(),
-  coverage: z.array(toolNoteCoverageSchema).min(1).nullable(),
+  summary: z.string().min(1).max(800),
+  facts: z.array(z.string().max(240)).max(8),
+  inferences: z.array(z.string().max(240)).max(6),
+  unresolvedQuestions: z.array(z.string().max(240)).max(5),
+  followUpActions: z.array(z.string().max(240)).max(5),
+  evidence: z.array(toolEvidenceSchema).max(4),
 });
 
 const jumpToLineToolSchema = z.object({
@@ -271,7 +221,7 @@ const searchPhrasesToolSchema = z.object({
 
 const jumpToGapToolSchema = z.object({
   gapIndex: z.number().int().min(0).nullable(),
-  windowLines: z.number().int().min(1).max(200).nullable(),
+  windowLines: z.number().int().min(1).max(3000).nullable(),
 });
 
 const finishToolSchema = z.object({
@@ -372,34 +322,6 @@ function stripNulls<T>(value: T): T {
 
 function isUuid(value: string | null | undefined) {
   return typeof value === "string" && z.string().uuid().safeParse(value).success;
-}
-
-function deriveCoverageFromEvidence(evidence: ReaderEvidenceMetadata[]) {
-  return evidence.map((item) => ({
-    startLine: item.range.startLine,
-    endLine: item.range.endLine,
-    startOffset: item.range.startOffset,
-    endOffset: item.range.endOffset,
-    source: item.source,
-    disposition: item.coverageDisposition,
-    reason:
-      item.kind === ReaderEvidenceKind.SearchHit
-        ? ReaderCoverageReason.TargetedSearch
-        : ReaderCoverageReason.SequentialRead,
-    toolName: item.capturedViaTool,
-  }));
-}
-
-function findLatestNote(session: ReaderSession, notes: ReaderNote[]) {
-  if (session.lastNoteId) {
-    const found = notes.find((note) => note.id === session.lastNoteId);
-
-    if (found) {
-      return found;
-    }
-  }
-
-  return notes.at(-1) ?? null;
 }
 
 function persistableCursor(range?: ReaderLineRange | null) {
@@ -534,15 +456,6 @@ function buildCoverageDigest(summary: ReaderCoverageSummary) {
 function buildNotesDigest(notes: ReaderNote[]) {
   return notes
     .map((note) => {
-      const checkpoint = note.checkpoint
-        ? {
-            kind: note.checkpoint.kind,
-            readRanges: note.checkpoint.readRanges,
-            skippedRanges: note.checkpoint.skippedRanges,
-            remainingGapRanges: note.checkpoint.remainingGapRanges,
-          }
-        : null;
-
       return toJsonText({
         noteId: note.id,
         ordinal: note.ordinal,
@@ -552,7 +465,6 @@ function buildNotesDigest(notes: ReaderNote[]) {
         inferences: note.inferences,
         unresolvedQuestions: note.unresolvedQuestions,
         followUpActions: note.followUpActions,
-        checkpoint,
         evidence: note.evidence.map((item, index) => ({
           id: item.id ?? `${note.id}:e${index + 1}`,
           kind: item.kind,
@@ -761,12 +673,14 @@ async function resolveSessionContext(
 
 async function createReaderTools(args: {
   session: ReaderSession;
+  recon: Awaited<ReturnType<typeof runReaderReconnaissance>>;
+  model: string;
   noteCount: number;
+  startedNewSession: boolean;
   onEvent?: ReaderSessionEventSink;
 }) {
   let currentCursor = persistableCursor(args.session.cursor) ?? null;
   let currentNoteCount = args.noteCount;
-  let finishEnabled = false;
   const emit = args.onEvent;
 
   const persistCursor = async (cursor: ReaderLineRange) => {
@@ -774,6 +688,79 @@ async function createReaderTools(args: {
     await updateReaderSession({
       sessionId: args.session.id,
       cursor,
+    });
+  };
+
+  const doSynthesisAndFinish = async (cursorArg?: ReaderLineRange | null) => {
+    const artifactsForSynthesis = await getReaderSessionArtifacts(args.session.id);
+
+    if (artifactsForSynthesis.notes.length === 0) {
+      throw new Error("finish requires at least one saved note");
+    }
+
+    const finalCursor = cursorArg ?? currentCursor ?? undefined;
+
+    await updateReaderSession({
+      sessionId: args.session.id,
+      status: ReaderSessionStatus.Synthesizing,
+      cursor: finalCursor ?? null,
+    });
+
+    await emit?.(
+      createReaderSessionEvent("thinking", args.session.id, {
+        stage: "synthesis",
+        message: "Reading complete; synthesizing the persisted notes into a handoff.",
+      })
+    );
+    await emit?.(
+      createReaderSessionEvent("status", args.session.id, {
+        status: ReaderSessionStatus.Synthesizing,
+        phase: "synthesis",
+        message: "Reader session is synthesizing the final handoff.",
+        startedNewSession: args.startedNewSession,
+      })
+    );
+
+    const coverageSummary = summarizeCoverageLedger(
+      args.recon.stats.totalLines,
+      artifactsForSynthesis.coverage
+    );
+    const normalizedEvidence = normalizeEvidence(artifactsForSynthesis.notes);
+    const synthesis = await synthesizeHandoff({
+      session: args.session,
+      recon: args.recon,
+      notes: artifactsForSynthesis.notes,
+      coverageSummary,
+      model: args.model,
+    });
+    const handoff = await saveReaderHandoff({
+      sessionId: args.session.id,
+      status: synthesis.draft.status,
+      executiveSummary: synthesis.draft.executiveSummary,
+      conclusions: synthesis.draft.conclusions.map((item) => ({
+        ...item,
+        statementKind: item.statementKind,
+      })),
+      gaps: synthesis.draft.gaps,
+      caveats: synthesis.draft.caveats,
+      limitations: synthesis.draft.limitations,
+      nextQuestions: synthesis.draft.nextQuestions,
+      evidence: normalizedEvidence,
+      coverageSummary,
+    });
+
+    await emit?.(
+      createReaderSessionEvent("handoff_ready", args.session.id, {
+        handoffId: handoff.id,
+        status: handoff.status,
+        executiveSummary: handoff.executiveSummary,
+        coverageSummary: handoff.coverageSummary,
+      })
+    );
+
+    return await finishReaderSession({
+      sessionId: args.session.id,
+      cursor: finalCursor,
     });
   };
 
@@ -804,6 +791,15 @@ async function createReaderTools(args: {
           });
 
           await persistCursor(getCursorFromReadResult(result));
+          await insertCoverageRange({
+            sessionId: args.session.id,
+            source: args.session.source,
+            startLine: result.startLine,
+            endLine: result.endLine,
+            disposition: ReaderCoverageDisposition.Read,
+            reason: ReaderCoverageReason.SequentialRead,
+            toolName: "readLines",
+          });
           await emit?.(
             createReaderSessionEvent("tool_result", args.session.id, {
               toolName: "readLines",
@@ -850,6 +846,15 @@ async function createReaderTools(args: {
           });
 
           await persistCursor(getCursorFromReadResult(result));
+          await insertCoverageRange({
+            sessionId: args.session.id,
+            source: args.session.source,
+            startLine: result.startLine,
+            endLine: result.endLine,
+            disposition: ReaderCoverageDisposition.Read,
+            reason: ReaderCoverageReason.SequentialRead,
+            toolName: "jumpToLine",
+          });
           await emit?.(
             createReaderSessionEvent("tool_result", args.session.id, {
               toolName: "jumpToLine",
@@ -895,6 +900,15 @@ async function createReaderTools(args: {
           });
 
           await persistCursor(getCursorFromSkipResult(result));
+          await insertCoverageRange({
+            sessionId: args.session.id,
+            source: args.session.source,
+            startLine: result.fromLine,
+            endLine: result.toLine,
+            disposition: ReaderCoverageDisposition.Skipped,
+            reason: ReaderCoverageReason.SequentialRead,
+            toolName: "skipLines",
+          });
           await emit?.(
             createReaderSessionEvent("tool_result", args.session.id, {
               toolName: "skipLines",
@@ -943,6 +957,17 @@ async function createReaderTools(args: {
           });
 
           await persistCursor(getCursorFromReadResult(result));
+          await insertCoverageRange({
+            sessionId: args.session.id,
+            source: args.session.source,
+            startLine: result.startLine,
+            endLine: result.endLine,
+            startOffset: result.startOffset,
+            endOffset: result.endOffset,
+            disposition: ReaderCoverageDisposition.Sampled,
+            reason: ReaderCoverageReason.SequentialRead,
+            toolName: "inspectSlice",
+          });
           await emit?.(
             createReaderSessionEvent("tool_result", args.session.id, {
               toolName: "inspectSlice",
@@ -1080,7 +1105,7 @@ async function createReaderTools(args: {
     }),
     saveNotes: tool({
       description:
-        "Persist a structured reader note with evidence, coverage ranges, and an optional checkpoint.",
+        "Persist a compact structured reader note with evidence, coverage ranges, and an optional checkpoint. Keep payloads small: concise summary, short bullets, at most 4 evidence items, and avoid long quotations.",
       parameters: toolNoteToolSchema,
       execute: async (input) => {
         await emit?.(
@@ -1093,10 +1118,6 @@ async function createReaderTools(args: {
         const normalizedToolInput = {
           ...input,
           noteId: isUuid(input.noteId) ? input.noteId : null,
-          coverage:
-            Array.isArray(input.coverage) && input.coverage.length > 0
-              ? input.coverage
-              : deriveCoverageFromEvidence(noteToolSchema.shape.evidence.parse(stripNulls(input.evidence))),
         };
         const normalizedInput = noteToolSchema.parse(stripNulls(normalizedToolInput));
 
@@ -1131,17 +1152,23 @@ async function createReaderTools(args: {
               noteId: result.noteId,
               ordinal,
               status: normalizedInput.status,
-              checkpointKind: normalizedInput.checkpoint?.kind,
-              coverageRangeCount: normalizedInput.coverage.length,
+              coverageRangeCount: 0,
             })
           );
-          await emit?.(
-            createReaderSessionEvent("coverage", args.session.id, {
-              noteId: result.noteId,
-              toolName: "saveNotes",
-              coverage: normalizedInput.coverage,
-            })
-          );
+
+          // Auto-finish: if the reading head is at or past the end of the source,
+          // synthesize and close the session immediately without waiting for the model.
+          const atEof =
+            currentCursor != null &&
+            currentCursor.endLine >= args.recon.stats.totalLines;
+
+          if (atEof) {
+            try {
+              await doSynthesisAndFinish(currentCursor);
+            } catch {
+              // Auto-finish failure is non-fatal for the note save; the model can still call finish() manually.
+            }
+          }
 
           return result;
         } catch (error) {
@@ -1159,7 +1186,7 @@ async function createReaderTools(args: {
     }),
     finish: tool({
       description:
-        "Close the reader session formally after the server has persisted a final handoff.",
+        "Signal that reading is complete. The server will synthesize a final handoff and close the session.",
       parameters: finishToolSchema,
       execute: async ({ cursor }) => {
         await emit?.(
@@ -1169,27 +1196,26 @@ async function createReaderTools(args: {
           })
         );
 
-        if (!finishEnabled) {
-          const error = new Error(
-            "Reader finish is not yet available. Save a final checkpoint and wait for server synthesis first."
-          );
-
+        // Guard against double-finish (e.g. auto-finish already ran inside saveNotes)
+        const currentSession = await getReaderSession(args.session.id);
+        if (currentSession && isTerminalStatus(currentSession.status)) {
+          const earlyResult = {
+            sessionId: args.session.id,
+            status: currentSession.status,
+            alreadyFinished: true,
+          };
           await emit?.(
             createReaderSessionEvent("tool_result", args.session.id, {
               toolName: "finish",
-              ok: false,
-              errorMessage: error.message,
+              ok: true,
+              result: earlyResult,
             })
           );
-
-          throw error;
+          return earlyResult;
         }
 
         try {
-          const result = await finishReaderSession({
-            sessionId: args.session.id,
-            cursor: cursor ?? currentCursor ?? undefined,
-          });
+          const result = await doSynthesisAndFinish(cursor);
 
           await emit?.(
             createReaderSessionEvent("tool_result", args.session.id, {
@@ -1217,9 +1243,6 @@ async function createReaderTools(args: {
 
   return {
     tools,
-    enableFinish() {
-      finishEnabled = true;
-    },
     getCursor() {
       return currentCursor;
     },
@@ -1249,7 +1272,7 @@ async function synthesizeHandoff(args: {
       coverageDigest,
     }),
     temperature: 0.1,
-    maxTokens: 1_400,
+    maxTokens: 4_000,
   });
 
   return {
@@ -1307,7 +1330,10 @@ export async function runReaderOrchestration(
     const currentSession = initialArtifacts.session ?? context.session;
     const toolRuntime = await createReaderTools({
       session: currentSession,
+      recon: context.recon,
+      model: context.model,
       noteCount: initialArtifacts.notes.length,
+      startedNewSession: context.startedNewSession,
       onEvent: emit,
     });
 
@@ -1351,28 +1377,42 @@ export async function runReaderOrchestration(
       temperature: 0.2,
     });
 
-    const artifactsAfterReading = await getReaderSessionArtifacts(sessionId);
-    const sessionAfterReading = artifactsAfterReading.session;
+    let artifactsAfterReading = await getReaderSessionArtifacts(sessionId);
+    let sessionAfterReading = artifactsAfterReading.session;
 
     if (!sessionAfterReading) {
       throw new Error("Reader session missing after reading loop");
     }
 
-    const latestNote = findLatestNote(sessionAfterReading, artifactsAfterReading.notes);
-
-    if (
-      !latestNote ||
-      latestNote.checkpoint?.kind !== READER_FINAL_CHECKPOINT_KIND
-    ) {
-      throw new Error(
-        "Reader orchestration requires a persisted final checkpoint note before synthesis"
+    // If the model called finish() during the reading loop, synthesis already ran inside finish.execute
+    // and the session is now terminal. Just emit the final status and return.
+    if (isTerminalStatus(sessionAfterReading.status)) {
+      await emit?.(
+        createReaderSessionEvent("status", sessionId, {
+          status: sessionAfterReading.status,
+          phase: "terminal",
+          message: "Reader session finished successfully.",
+          startedNewSession: context.startedNewSession,
+        })
       );
+
+      return {
+        session: sessionAfterReading,
+        notes: artifactsAfterReading.notes,
+        handoff: artifactsAfterReading.handoff,
+        startedNewSession: context.startedNewSession,
+        model: context.model,
+        usage: {
+          totalTokens: readingResult.usage?.totalTokens ?? 0,
+          inputTokens: readingResult.usage?.promptTokens ?? 0,
+          outputTokens: readingResult.usage?.completionTokens ?? 0,
+        },
+      };
     }
 
-    if (!readingResult.text.includes(READER_SYNTHESIS_READY_SENTINEL)) {
-      throw new Error(
-        "Reader orchestration did not receive the synthesis-ready sentinel from the model"
-      );
+    // Fallback: model exhausted maxSteps without calling finish — run server-side synthesis + close
+    if (artifactsAfterReading.notes.length === 0) {
+      throw new Error("Reader orchestration requires at least one persisted note before synthesis");
     }
 
     await updateReaderSession({
@@ -1434,13 +1474,11 @@ export async function runReaderOrchestration(
       })
     );
 
-    toolRuntime.enableFinish();
-
     currentStage = "finish";
     await emit?.(
       createReaderSessionEvent("thinking", sessionId, {
         stage: "finish",
-        message: "Final handoff persisted; requesting formal session finish.",
+        message: "Final handoff persisted; closing the session.",
       })
     );
 
