@@ -127,8 +127,9 @@ export async function runReaderOrchestration(
         existingNoteCount: initialArtifacts.notes.length,
       }),
       tools: toolRuntime.tools,
+      toolChoice: "required",
       maxSteps: MAX_READER_STEPS,
-      maxTokens: 1_200,
+      maxTokens: 8_000,
       temperature: 0.2,
     });
 
