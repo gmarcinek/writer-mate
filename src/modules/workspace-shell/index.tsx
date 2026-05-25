@@ -38,10 +38,8 @@ export default function WorkspaceShell({
       <main className="app-shell-main">{main}</main>
       <aside
         className={[
-          "app-shell-right bg-[var(--color-surface)] overflow-y-auto p-4",
-          hideSidebar
-            ? "border-r border-[var(--color-border)]"
-            : "border-l border-[var(--color-border)]",
+          "app-shell-right bg-[var(--color-surface)] overflow-hidden",
+          "border-l border-[var(--color-border)]",
         ].join(" ")}
       >
         {rightPanel}

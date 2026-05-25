@@ -76,6 +76,12 @@
   line-height: 1.2;
 }
 
+.bookContent {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
 .statusBadge {
   flex-shrink: 0;
   border: 1px solid var(--color-border);

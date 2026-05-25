@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import {
   readerCoverageRanges,
   readerHandoffs,
+  readerMasterHandoffs,
   readerNotes,
   readerSessions,
 } from "@/lib/schema";
@@ -25,10 +26,12 @@ import {
   type ReaderCoverageRange,
   type ReaderCoverageSummary,
   type ReaderCheckpoint,
+  type ReaderConclusion,
   type ReaderEvidenceMetadata,
   type ReaderGoal,
   type ReaderHandoff,
   type ReaderLineRange,
+  type ReaderMasterHandoff,
   type ReaderNote,
   type ReaderSession,
   type ReaderSourceRef,
@@ -439,6 +442,26 @@ function mapHandoff(
     evidence: z.array(evidenceSchema).parse(row.evidence) as ReaderEvidenceMetadata[],
     coverageSummary: coverageSummarySchema.parse(row.coverageSummary),
     createdAt: row.createdAt.toISOString(),
+  };
+}
+
+function mapMasterHandoff(
+  row: typeof readerMasterHandoffs.$inferSelect
+): ReaderMasterHandoff {
+  return {
+    id: row.id,
+    bookId: row.bookId,
+    status: row.status,
+    executiveSummary: row.executiveSummary,
+    conclusions: z.array(conclusionSchema).parse(row.conclusions) as ReaderConclusion[],
+    gaps: z.array(z.string()).parse(row.gaps),
+    caveats: z.array(z.string()).parse(row.caveats),
+    limitations: z.array(z.string()).parse(row.limitations),
+    nextQuestions: z.array(z.string()).parse(row.nextQuestions),
+    sessionIds: z.array(z.string().uuid()).parse(row.sessionIds),
+    sessionCount: row.sessionCount,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 
@@ -890,4 +913,79 @@ export async function getLatestReaderSessionArtifactsForBook(
   }
 
   return getReaderSessionArtifacts(sessionId);
+}
+
+export async function listReaderSessionsForBook(
+  bookId: string
+): Promise<ReaderSession[]> {
+  const rows = await db
+    .select()
+    .from(readerSessions)
+    .where(eq(readerSessions.bookId, bookId))
+    .orderBy(desc(readerSessions.createdAt));
+
+  return rows.map(mapSession);
+}
+
+export async function getReaderMasterHandoff(
+  bookId: string
+): Promise<ReaderMasterHandoff | null> {
+  const rows = await db
+    .select()
+    .from(readerMasterHandoffs)
+    .where(eq(readerMasterHandoffs.bookId, bookId))
+    .limit(1);
+
+  const row = rows[0];
+
+  return row ? mapMasterHandoff(row) : null;
+}
+
+export async function saveReaderMasterHandoff(input: {
+  bookId: string;
+  status: ReaderHandoffStatus;
+  executiveSummary: string;
+  conclusions: ReaderConclusion[];
+  gaps: string[];
+  caveats: string[];
+  limitations: string[];
+  nextQuestions: string[];
+  sessionIds: string[];
+  sessionCount: number;
+}): Promise<ReaderMasterHandoff> {
+  const now = new Date();
+  const [row] = await db
+    .insert(readerMasterHandoffs)
+    .values({
+      bookId: input.bookId,
+      status: input.status,
+      executiveSummary: input.executiveSummary,
+      conclusions: input.conclusions,
+      gaps: input.gaps,
+      caveats: input.caveats,
+      limitations: input.limitations,
+      nextQuestions: input.nextQuestions,
+      sessionIds: input.sessionIds,
+      sessionCount: input.sessionCount,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: readerMasterHandoffs.bookId,
+      set: {
+        status: input.status,
+        executiveSummary: input.executiveSummary,
+        conclusions: input.conclusions,
+        gaps: input.gaps,
+        caveats: input.caveats,
+        limitations: input.limitations,
+        nextQuestions: input.nextQuestions,
+        sessionIds: input.sessionIds,
+        sessionCount: input.sessionCount,
+        updatedAt: now,
+      },
+    })
+    .returning();
+
+  return mapMasterHandoff(row);
 }

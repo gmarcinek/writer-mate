@@ -204,10 +204,35 @@ export const readerCoverageRanges = pgTable(
   })
 );
 
+export const readerMasterHandoffs = pgTable(
+  "reader_master_handoffs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    bookId: uuid("book_id")
+      .notNull()
+      .references(() => books.id, { onDelete: "cascade" }),
+    status: text("status").$type<ReaderHandoffStatus>().notNull(),
+    executiveSummary: text("executive_summary").notNull(),
+    conclusions: jsonb("conclusions").notNull().default([]),
+    gaps: jsonb("gaps").$type<string[]>().notNull().default([]),
+    caveats: jsonb("caveats").$type<string[]>().notNull().default([]),
+    limitations: jsonb("limitations").$type<string[]>().notNull().default([]),
+    nextQuestions: jsonb("next_questions").$type<string[]>().notNull().default([]),
+    sessionIds: jsonb("session_ids").$type<string[]>().notNull().default([]),
+    sessionCount: integer("session_count").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    bookIdIdx: uniqueIndex("reader_master_handoffs_book_id_idx").on(table.bookId),
+  })
+);
+
 export const booksRelations = relations(books, ({ many }) => ({
   documents: many(documents),
   readerSessions: many(readerSessions),
   readerCoverageRanges: many(readerCoverageRanges),
+  readerMasterHandoffs: many(readerMasterHandoffs),
 }));
 
 export const documentsRelations = relations(documents, ({ one, many }) => ({
@@ -266,6 +291,16 @@ export const readerHandoffsRelations = relations(
       references: [readerSessions.id],
     }),
     coverageRanges: many(readerCoverageRanges),
+  })
+);
+
+export const readerMasterHandoffsRelations = relations(
+  readerMasterHandoffs,
+  ({ one }) => ({
+    book: one(books, {
+      fields: [readerMasterHandoffs.bookId],
+      references: [books.id],
+    }),
   })
 );
 

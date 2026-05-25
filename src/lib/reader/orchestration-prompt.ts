@@ -1,6 +1,7 @@
 import {
   ReaderMode,
   type ReaderGoal,
+  type ReaderHandoff,
   type ReaderReconBrief,
   type ReaderSession,
 } from "@/lib/reader/types";
@@ -141,4 +142,37 @@ export function buildReaderFinishPrompt(sessionId: string) {
     "Call the finish tool exactly once to close the session formally.",
     "Do not emit any prose. Do not call any other tool.",
   ].join("\n");
+}
+
+export function buildMasterHandoffSynthesisPrompt(args: {
+  sessions: { goal: ReaderGoal; status: string }[];
+  handoffs: ReaderHandoff[];
+}): string {
+  const layersSummary = args.sessions.map((session, index) => {
+    const handoff = args.handoffs[index];
+    return [
+      `=== Layer ${index + 1}: ${session.goal.prompt} ===`,
+      `Status: ${session.status}`,
+      handoff ? `Executive summary: ${handoff.executiveSummary}` : "No handoff",
+      handoff?.conclusions.length
+        ? `Conclusions:\n${handoff.conclusions.map((c) => `  - [${c.statementKind}] ${c.title}: ${c.summary}`).join("\n")}`
+        : "",
+      handoff?.gaps.length ? `Gaps: ${handoff.gaps.join("; ")}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  });
+
+  return [
+    "Synthesize a master reader handoff integrating findings from all reading layers.",
+    "Write all content in the same language as the source text.",
+    "Return strict JSON only. No markdown fences, no commentary.",
+    "The JSON must contain: status, executiveSummary, conclusions, gaps, caveats, limitations, nextQuestions.",
+    "Each conclusion must contain: title, summary, statementKind, confidence, evidenceIds.",
+    "Integrate findings from all layers. Highlight agreements and contradictions between layers where relevant.",
+    "Choose status='complete' only if together the layers provide comprehensive coverage. Otherwise choose 'partial'.",
+    `Number of reading layers: ${args.sessions.length}`,
+    "Reading layers:",
+    ...layersSummary,
+  ].join("\n\n");
 }

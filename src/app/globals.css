@@ -37,19 +37,16 @@ body {
 }
 
 .app-shell[data-sidebar-hidden="true"] {
-  grid-template-columns: minmax(320px, 20vw) minmax(0, 1fr);
-  grid-template-areas: "right   main";
+  grid-template-columns: minmax(720px, 1fr) 2fr;
+  grid-template-areas: "main right";
 }
 
 .app-shell-left   { grid-area: left; min-height: 0; }
 .app-shell-main   { grid-area: main; overflow: auto; min-height: 0; }
 .app-shell-right  { grid-area: right; min-height: 0; }
 
-.app-shell[data-sidebar-hidden="true"] .app-shell-right {
-  padding: 1rem !important;
-}
 
-@media (max-width: 1200px) {
+@media (max-width: 1023px) {
   .app-shell {
     grid-template-columns: 240px minmax(0, 1fr) 320px;
   }
@@ -59,7 +56,7 @@ body {
   }
 
   .app-shell[data-sidebar-hidden="true"] {
-    grid-template-columns: 480px minmax(0, 1fr);
+    grid-template-columns: 1fr 1fr;
   }
 }
 

@@ -1,8 +1,8 @@
 export {
   readerOrchestrationInputSchema,
-  runReaderOrchestration,
   type ReaderOrchestrationInput,
   type ReaderOrchestrationResult,
   type RunReaderOrchestrationOptions,
   type ReaderOrchestrationStage,
-} from "./orchestration/index";
+} from "./schemas";
+export { runReaderOrchestration } from "./run";

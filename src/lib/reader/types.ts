@@ -295,6 +295,22 @@ export interface ReaderHandoff {
   createdAt: string;
 }
 
+export interface ReaderMasterHandoff {
+  id: string;
+  bookId: string;
+  status: ReaderHandoffStatus;
+  executiveSummary: string;
+  conclusions: ReaderConclusion[];
+  gaps: string[];
+  caveats: string[];
+  limitations: string[];
+  nextQuestions: string[];
+  sessionIds: string[];
+  sessionCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ReaderSession {
   id: string;
   source: ReaderSourceRef;
