@@ -37,6 +37,7 @@ import {
 import { resolveSessionContext } from "./session";
 import { synthesizeHandoff } from "./synthesis";
 import { createReaderTools } from "./tools";
+import { recognizeReaderIntent } from "./intent";
 
 async function streamFinalAnswer(args: {
   sessionId: string;
@@ -114,6 +115,13 @@ export async function runReaderOrchestration(
 
     const initialArtifacts = await getReaderSessionArtifacts(sessionId);
     const currentSession = initialArtifacts.session ?? context.session;
+
+    const intent = await recognizeReaderIntent({
+      session: currentSession,
+      recon: context.recon,
+      model: context.model,
+    });
+
     const toolRuntime = await createReaderTools({
       session: currentSession,
       recon: context.recon,
@@ -151,7 +159,7 @@ export async function runReaderOrchestration(
 
     const readingResult = await generateText({
       model: openai(context.model),
-      system: buildReaderSystemPrompt({ recon: context.recon, session: currentSession }),
+      system: buildReaderSystemPrompt({ recon: context.recon, session: currentSession, intent }),
       prompt: buildReaderRunPrompt({
         recon: context.recon,
         session: currentSession,
@@ -268,6 +276,7 @@ export async function runReaderOrchestration(
       notes: artifactsAfterReading.notes,
       coverageSummary,
       model: context.model,
+      intent,
     });
     const handoff = await saveReaderHandoff({
       sessionId,

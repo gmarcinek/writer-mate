@@ -20,6 +20,28 @@ export enum ReaderMode {
   Exhaustive = "exhaustive",
 }
 
+export enum ReaderIntentType {
+  ExhaustiveRead = "exhaustive_read",
+  QuestionAnswering = "question_answering",
+  TargetedExtraction = "targeted_extraction",
+  Analysis = "analysis",
+  StructureSurvey = "structure_survey",
+}
+
+export interface ReaderIntent {
+  intentType: ReaderIntentType;
+  /** Clear restatement of what the user ultimately wants to achieve. */
+  strategicGoal: string;
+  /** Ordered intermediate steps to reach the strategic goal. */
+  intermediateGoals: string[];
+  /** Specific topics, entities, or sections to prioritise. */
+  focusAreas: string[];
+  /** What can safely be skipped or treated superficially. */
+  skipHeuristics: string[];
+  /** Textual signals that warrant extra attention (definitions, claims, etc.). */
+  prioritySignals: string[];
+}
+
 export enum ReaderReconContentType {
   Narrative = "narrative",
   TechnicalDocumentation = "technical_documentation",

@@ -11,7 +11,7 @@ import {
   buildReaderSynthesisPrompt,
   buildMasterHandoffSynthesisPrompt,
 } from "@/lib/reader/orchestration-prompt";
-import { ReaderHandoffStatus, ReaderSessionStatus, type ReaderHandoff, type ReaderSession } from "@/lib/reader/types";
+import { ReaderHandoffStatus, ReaderSessionStatus, type ReaderHandoff, type ReaderIntent, type ReaderSession } from "@/lib/reader/types";
 import { handoffDraftSchema } from "./schemas";
 import { buildCoverageDigest, buildNotesDigest, parseLooseJson } from "./utils";
 import type { ReaderNote, ReaderCoverageSummary } from "@/lib/reader/types";
@@ -23,6 +23,7 @@ export async function synthesizeHandoff(args: {
   notes: ReaderNote[];
   coverageSummary: ReaderCoverageSummary;
   model: string;
+  intent?: ReaderIntent;
 }) {
   const notesDigest = buildNotesDigest(args.notes);
   const coverageDigest = buildCoverageDigest(args.coverageSummary);
@@ -38,9 +39,10 @@ export async function synthesizeHandoff(args: {
       recon: args.recon,
       notesDigest,
       coverageDigest,
+      intent: args.intent,
     }),
     temperature: 0.1,
-    maxTokens: 4_000,
+    maxTokens: 8_000,
   });
 
   return {

@@ -268,7 +268,7 @@ const conclusionSchema = z.object({
   summary: z.string().min(1),
   statementKind: z.nativeEnum(ReaderStatementKind),
   confidence: z.number().min(0).max(1).optional(),
-  evidenceIds: z.array(z.string().uuid()),
+  evidenceIds: z.array(z.string()),
 });
 
 const saveHandoffSchema = z.object({

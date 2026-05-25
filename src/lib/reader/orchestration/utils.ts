@@ -29,8 +29,84 @@ export function toJsonText(value: unknown) {
 
 export function parseLooseJson(text: string) {
   const trimmed = text.trim();
-  const withoutFence = trimmed.replace(/^```(?:json)?\s*/i, "").replace(/```$/, "");
-  return JSON.parse(withoutFence.trim());
+  const withoutFence = trimmed
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/, "")
+    .trim();
+
+  try {
+    return JSON.parse(withoutFence);
+  } catch {
+    // Attempt to repair truncated JSON (model hit maxTokens mid-output)
+    return JSON.parse(repairTruncatedJson(withoutFence));
+  }
+}
+
+/**
+ * State-machine repair for JSON truncated at an arbitrary position.
+ * Handles: unclosed strings, trailing commas, unclosed arrays/objects.
+ */
+function repairTruncatedJson(raw: string): string {
+  const stack: Array<"{" | "["> = [];
+  let result = "";
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i]!;
+
+    if (escaped) {
+      result += ch;
+      escaped = false;
+      continue;
+    }
+
+    if (inString) {
+      if (ch === "\\") {
+        escaped = true;
+        result += ch;
+      } else if (ch === '"') {
+        inString = false;
+        result += ch;
+      } else {
+        result += ch;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      result += ch;
+    } else if (ch === "{") {
+      stack.push("{");
+      result += ch;
+    } else if (ch === "[") {
+      stack.push("[");
+      result += ch;
+    } else if (ch === "}") {
+      if (stack.at(-1) === "{") stack.pop();
+      result += ch;
+    } else if (ch === "]") {
+      if (stack.at(-1) === "[") stack.pop();
+      result += ch;
+    } else {
+      result += ch;
+    }
+  }
+
+  // Close any unclosed string
+  if (inString) result += '"';
+
+  // Remove trailing comma before we close containers
+  const withoutTrailingComma = result.trimEnd().replace(/,\s*$/, "");
+
+  // Close remaining containers in reverse order
+  let closed = withoutTrailingComma;
+  for (let i = stack.length - 1; i >= 0; i--) {
+    closed += stack[i] === "{" ? "}" : "]";
+  }
+
+  return closed;
 }
 
 export function stripNulls<T>(value: T): T {
@@ -124,10 +200,10 @@ export function summarizeCoverageLedger(
 export function normalizeEvidence(notes: ReaderNote[]) {
   const evidence: ReaderEvidenceMetadata[] = [];
   for (const note of notes) {
-    note.evidence.forEach((item, index) => {
+    note.evidence.forEach((item) => {
       evidence.push({
         ...item,
-        id: item.id ?? `${note.id}:e${index + 1}`,
+        id: item.id ?? crypto.randomUUID(),
       });
     });
   }
