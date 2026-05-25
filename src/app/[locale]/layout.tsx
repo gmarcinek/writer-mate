@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { getTheme } from "@/lib/theme";
 import EntitiesPanel from "@/modules/entities-panel";
+import HintsPanel from "@/modules/hints-panel";
 import BookList from "@/modules/books-list";
 import WorkspaceShell from "@/modules/workspace-shell";
 
@@ -49,6 +50,7 @@ export default async function LocaleLayout({
             settingsContent={settingsContent}
             main={children}
             rightPanel={<EntitiesPanel />}
+            hintsPanel={<HintsPanel />}
           />
         </NextIntlClientProvider>
       </body>

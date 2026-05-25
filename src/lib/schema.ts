@@ -18,6 +18,7 @@ import type {
   ReaderCoverageSummary,
   ReaderGoal,
   ReaderHandoffStatus,
+  ReaderHintStatus,
   ReaderNoteStatus,
   ReaderSessionStatus,
   ReaderSourceType,
@@ -333,3 +334,33 @@ export const readerCoverageRangesRelations = relations(
     }),
   })
 );
+
+export const readerHints = pgTable("reader_hints", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  sessionId: uuid("session_id")
+    .notNull()
+    .references(() => readerSessions.id, { onDelete: "cascade" }),
+  bookId: uuid("book_id")
+    .notNull()
+    .references(() => books.id, { onDelete: "cascade" }),
+  status: text("status").$type<ReaderHintStatus>().notNull().default("pending" as ReaderHintStatus),
+  description: text("description").notNull(),
+  startLine: integer("start_line").notNull(),
+  endLine: integer("end_line").notNull(),
+  fragment: text("fragment").notNull(),
+  proposedChange: text("proposed_change").notNull(),
+  appliedAt: timestamp("applied_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const readerHintsRelations = relations(readerHints, ({ one }) => ({
+  session: one(readerSessions, {
+    fields: [readerHints.sessionId],
+    references: [readerSessions.id],
+  }),
+  book: one(books, {
+    fields: [readerHints.bookId],
+    references: [books.id],
+  }),
+}));

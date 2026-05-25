@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import {
   readerCoverageRanges,
   readerHandoffs,
+  readerHints,
   readerMasterHandoffs,
   readerNotes,
   readerSessions,
@@ -16,6 +17,7 @@ import {
   ReaderCoverageReason,
   ReaderEvidenceKind,
   ReaderHandoffStatus,
+  ReaderHintStatus,
   ReaderMode,
   ReaderNoteStatus,
   ReaderReconContentType,
@@ -30,6 +32,7 @@ import {
   type ReaderEvidenceMetadata,
   type ReaderGoal,
   type ReaderHandoff,
+  type ReaderHint,
   type ReaderLineRange,
   type ReaderMasterHandoff,
   type ReaderNote,
@@ -988,4 +991,78 @@ export async function saveReaderMasterHandoff(input: {
     .returning();
 
   return mapMasterHandoff(row);
+}
+
+// ── Hints ─────────────────────────────────────────────────────────────────────
+
+function mapHint(row: typeof readerHints.$inferSelect): ReaderHint {
+  return {
+    id: row.id,
+    sessionId: row.sessionId,
+    bookId: row.bookId,
+    status: row.status,
+    description: row.description,
+    startLine: row.startLine,
+    endLine: row.endLine,
+    fragment: row.fragment,
+    proposedChange: row.proposedChange,
+    appliedAt: row.appliedAt ? row.appliedAt.toISOString() : null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+export async function createReaderHint(input: {
+  sessionId: string;
+  bookId: string;
+  description: string;
+  startLine: number;
+  endLine: number;
+  fragment: string;
+  proposedChange: string;
+}): Promise<ReaderHint> {
+  const [row] = await db
+    .insert(readerHints)
+    .values({
+      sessionId: input.sessionId,
+      bookId: input.bookId,
+      status: ReaderHintStatus.Pending,
+      description: input.description,
+      startLine: input.startLine,
+      endLine: input.endLine,
+      fragment: input.fragment,
+      proposedChange: input.proposedChange,
+    })
+    .returning();
+  return mapHint(row);
+}
+
+export async function listReaderHintsForBook(bookId: string): Promise<ReaderHint[]> {
+  const rows = await db
+    .select()
+    .from(readerHints)
+    .where(eq(readerHints.bookId, bookId))
+    .orderBy(desc(readerHints.createdAt));
+  return rows.map(mapHint);
+}
+
+export async function updateReaderHint(
+  hintId: string,
+  patch: {
+    status?: ReaderHintStatus;
+    proposedChange?: string;
+    appliedAt?: Date | null;
+  }
+): Promise<ReaderHint> {
+  const [row] = await db
+    .update(readerHints)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(eq(readerHints.id, hintId))
+    .returning();
+  if (!row) throw new Error(`Hint not found: ${hintId}`);
+  return mapHint(row);
+}
+
+export async function deleteReaderHint(hintId: string): Promise<void> {
+  await db.delete(readerHints).where(eq(readerHints.id, hintId));
 }

@@ -1,0 +1,263 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.header {
+  flex-shrink: 0;
+  padding: 16px 16px 0;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 12px;
+}
+
+.eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin: 0 0 2px;
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.muted {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.emptyIcon {
+  font-size: 28px;
+  margin: 0;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.groupLabel {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin: 8px 0 2px;
+}
+
+/* === Card === */
+.card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color 140ms, background 140ms;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--color-background);
+}
+
+.card:hover {
+  border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border));
+  background: color-mix(in srgb, var(--color-accent) 4%, var(--color-background));
+}
+
+.cardActive {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 6%, var(--color-background));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 15%, transparent);
+}
+
+.cardApplied {
+  opacity: 0.6;
+}
+
+.cardDismissed {
+  opacity: 0.4;
+}
+
+.lineBadge {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-accent) 15%, var(--color-background));
+  color: var(--color-accent);
+  font-size: 10px;
+  font-weight: 700;
+  font-family: ui-monospace, monospace;
+}
+
+.description {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--color-foreground);
+  margin: 0;
+}
+
+.fragment {
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  border-left: 2px solid var(--color-border);
+  padding-left: 8px;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.proposedChange {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-foreground);
+  margin: 0;
+  padding: 6px 8px;
+  background: color-mix(in srgb, var(--color-border) 40%, transparent);
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.btnApply,
+.btnEdit,
+.btnDismiss,
+.btnSave,
+.btnCancel {
+  border: none;
+  border-radius: 5px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 10px;
+  transition: opacity 140ms;
+}
+
+.btnApply {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.btnEdit {
+  background: color-mix(in srgb, var(--color-border) 80%, transparent);
+  color: var(--color-foreground);
+}
+
+.btnDismiss {
+  background: transparent;
+  color: var(--color-text-muted);
+  margin-left: auto;
+  padding: 4px 6px;
+}
+
+.btnApply:hover,
+.btnEdit:hover,
+.btnDismiss:hover {
+  opacity: 0.75;
+}
+
+.appliedLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--color-accent) 70%, var(--color-text-muted));
+  margin: 0;
+}
+
+/* === Edit area === */
+.editArea {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.editTextarea {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 6px 8px;
+  resize: vertical;
+}
+
+.editTextarea:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.editActions {
+  display: flex;
+  gap: 6px;
+}
+
+.btnSave {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.btnCancel {
+  background: color-mix(in srgb, var(--color-border) 80%, transparent);
+  color: var(--color-foreground);
+}

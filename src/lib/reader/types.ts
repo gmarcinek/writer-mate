@@ -348,3 +348,24 @@ export interface ReaderSession {
   createdAt: string;
   updatedAt: string;
 }
+
+export enum ReaderHintStatus {
+  Pending = "pending",
+  Applied = "applied",
+  Dismissed = "dismissed",
+}
+
+export interface ReaderHint {
+  id: string;
+  sessionId: string;
+  bookId: string;
+  status: ReaderHintStatus;
+  description: string;
+  startLine: number;
+  endLine: number;
+  fragment: string;
+  proposedChange: string;
+  appliedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}

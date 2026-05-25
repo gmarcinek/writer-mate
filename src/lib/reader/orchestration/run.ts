@@ -173,6 +173,7 @@ export async function runReaderOrchestration(
         recon: context.recon,
         session: currentSession,
         existingNoteCount: initialArtifacts.notes.length,
+        hasExistingHandoff: Boolean(initialArtifacts.handoff),
       }),
       tools: toolRuntime.tools,
       maxSteps: MAX_READER_STEPS,

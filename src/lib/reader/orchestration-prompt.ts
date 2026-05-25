@@ -103,6 +103,13 @@ TWOJE NARZĘDZIA:
 - saveNotes(...) — zapisuje notatkę. WYWOŁUJ ZAWSZE. Dodawaj odniesienia do linii!
 - finish() — kończy sesję. Upewnij się że wcześniej zapisałeś notatki.
 
+ZASADA — NARZĘDZI UŻYWAJ TYLKO GDY ADEKWATNE:
+Przed pierwszą akcją oceń: czy istniejące notatki i handoff wystarczają do realizacji celu?
+- Jeśli tak → wywołaj finish() bezpośrednio. Nie czytaj nic więcej.
+- Jeśli potrzebujesz konkretnych danych → preferuj searchPhrases() nad readLines() gdy lokalizujesz fragmenty.
+- Jeśli pytanie wymaga nowej lektury → czytaj, ale tylko tyle ile potrzeba.
+Nie uruchamiaj readLines gdy odpowiedź jest już w notatkach.
+
 STRATEGIA CZYTANIA:
 1. Zacznij od readLines(1, 200) — zorientuj się w strukturze i formacie.
 2. Dostosuj tempo do treści:
@@ -167,6 +174,7 @@ export function buildReaderRunPrompt(args: {
   recon: ReaderReconBrief;
   session: ReaderSession;
   existingNoteCount: number;
+  hasExistingHandoff?: boolean;
 }) {
   const modeInstruction =
     args.session.goal.mode === ReaderMode.Exhaustive
@@ -175,7 +183,9 @@ export function buildReaderRunPrompt(args: {
 
   const resumeInstruction =
     args.existingNoteCount > 0
-      ? `Wznów istniejącą sesję. Masz już ${args.existingNoteCount} notatek. Kontynuuj od zapisanego kursora, nie duplikuj poprzednich notatek.`
+      ? args.hasExistingHandoff
+        ? `Wznów istniejącą sesję. Masz już ${args.existingNoteCount} notatek oraz ukończony handoff. NAJPIERW oceń: czy handoff już odpowiada na cel. Jeśli tak — wywołaj finish() bez dalszego czytania.`
+        : `Wznów istniejącą sesję. Masz już ${args.existingNoteCount} notatek. Kontynuuj od zapisanego kursora, nie duplikuj poprzednich notatek.`
       : "To jest nowa sesja. Zacznij od początku źródła — readLines(1, 200)."
 
   return `${modeInstruction}\n${resumeInstruction}`;

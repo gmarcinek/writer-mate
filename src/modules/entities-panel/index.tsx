@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useParams, usePathname } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -242,14 +242,14 @@ export default function EntitiesPanel() {
   const bookId = typeof params.id === "string" ? params.id : null;
   const onBookPage = Boolean(bookId) && isBookPage(pathname);
   const eventSourceRef = useRef<EventSource | null>(null);
-  const expandedLayerIdRef = useRef<string | null>(null);
+  const chatAreaRef = useRef<HTMLDivElement>(null);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
 
   const [layers, setLayers] = useState<ReaderSession[]>([]);
   const [masterHandoff, setMasterHandoff] = useState<ReaderMasterHandoff | null>(null);
   const [masterHandoffExpanded, setMasterHandoffExpanded] = useState(false);
-  const [expandedLayerId, setExpandedLayerId] = useState<string | null>(null);
-  const [expandedArtifacts, setExpandedArtifacts] = useState<ReaderSessionArtifacts | null>(null);
-  const [expandedArtifactsLoading, setExpandedArtifactsLoading] = useState(false);
+  const [layerArtifacts, setLayerArtifacts] = useState<Record<string, ReaderSessionArtifacts>>({});
+  const [artifactsLoadingIds, setArtifactsLoadingIds] = useState<Set<string>>(() => new Set());
   const [streamingLayerId, setStreamingLayerId] = useState<string | null>(null);
   const [layerEvents, setLayerEvents] = useState<Record<string, EventLogItem[]>>({});
   const [layerAnswers, setLayerAnswers] = useState<Record<string, string>>({});
@@ -263,13 +263,21 @@ export default function EntitiesPanel() {
   const [isLoading, setIsLoading] = useState(false);
   const [layerIntents, setLayerIntents] = useState<Record<string, { intentType: string; strategicGoal: string; intermediateGoals: string[] }>>({});
   const [activeToolName, setActiveToolName] = useState<string | null>(null);
+  const [activePickerSessionId, setActivePickerSessionId] = useState<string | null>(null);
 
-  // Keep ref in sync with state so closures always have current value
-  expandedLayerIdRef.current = expandedLayerId;
+  function scrollToSession(sessionId: string) {
+    const chatArea = chatAreaRef.current;
+    if (!chatArea) return;
+    const el = chatArea.querySelector<HTMLElement>(`[data-session-id="${sessionId}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    setActivePickerSessionId(sessionId);
+  }
 
-  function setExpandedLayerIdSynced(id: string | null) {
-    expandedLayerIdRef.current = id;
-    setExpandedLayerId(id);
+  function focusNewConversation() {
+    promptRef.current?.focus();
+    chatAreaRef.current?.scrollTo({ top: chatAreaRef.current.scrollHeight, behavior: "smooth" });
   }
 
   // Cleanup on unmount
@@ -287,8 +295,8 @@ export default function EntitiesPanel() {
       eventSourceRef.current = null;
       setLayers([]);
       setMasterHandoff(null);
-      setExpandedLayerIdSynced(null);
-      setExpandedArtifacts(null);
+      setLayerArtifacts({});
+      setArtifactsLoadingIds(new Set());
       setStreamingLayerId(null);
       setLayerEvents({});
       setLayerAnswers({});
@@ -316,18 +324,19 @@ export default function EntitiesPanel() {
 
         if (cancelled) return;
 
-        setLayers([...data.sessions].reverse());
+        const reversed = [...data.sessions].reverse();
+        setLayers(reversed);
         setMasterHandoff(data.masterHandoff);
 
-        const activeSession = data.sessions.find((s) => !isTerminalStatus(s.status));
-
+        const activeSession = reversed.find((s) => !isTerminalStatus(s.status));
         if (activeSession) {
-          setStreamingLayerId(activeSession.id);
-          setExpandedLayerIdSynced(activeSession.id);
           openStream(activeSession.id, 'gpt-5.5', bookId!);
-        } else if (data.sessions.length > 0 && data.sessions[0]) {
-          setExpandedLayerIdSynced(data.sessions[0].id);
-          void fetchAndSetArtifacts(data.sessions[0].id);
+        }
+
+        for (const session of reversed) {
+          if (isTerminalStatus(session.status)) {
+            void fetchAndSetArtifacts(session.id);
+          }
         }
       } catch (error) {
         if (!cancelled) {
@@ -352,17 +361,21 @@ export default function EntitiesPanel() {
   }, [bookId, onBookPage]);
 
   async function fetchAndSetArtifacts(sessionId: string) {
-    setExpandedArtifactsLoading(true);
+    setArtifactsLoadingIds((prev) => new Set([...prev, sessionId]));
     try {
       const response = await fetch(`/api/reader/sessions/${sessionId}`, {
         cache: "no-store",
       });
       const artifacts = await readJson<ReaderSessionArtifacts>(response);
-      setExpandedArtifacts(artifacts);
+      setLayerArtifacts((prev) => ({ ...prev, [sessionId]: artifacts }));
     } catch (error) {
       setStreamError(error instanceof Error ? error.message : "Failed to load session artifacts");
     } finally {
-      setExpandedArtifactsLoading(false);
+      setArtifactsLoadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(sessionId);
+        return next;
+      });
     }
   }
 
@@ -373,10 +386,7 @@ export default function EntitiesPanel() {
     const data = await readJson<LayersResponse>(response);
     setLayers([...data.sessions].reverse());
     setMasterHandoff(data.masterHandoff);
-
-    if (expandedLayerIdRef.current === finishedSessionId) {
-      void fetchAndSetArtifacts(finishedSessionId);
-    }
+    void fetchAndSetArtifacts(finishedSessionId);
   }
 
   function appendEvent(event: ReaderSessionEvent) {
@@ -496,18 +506,6 @@ export default function EntitiesPanel() {
     }) as EventListener);
   }
 
-  async function handleToggleLayer(layerId: string) {
-    if (expandedLayerId === layerId) {
-      setExpandedLayerIdSynced(null);
-      setExpandedArtifacts(null);
-      return;
-    }
-
-    setExpandedLayerIdSynced(layerId);
-    setExpandedArtifacts(null);
-    await fetchAndSetArtifacts(layerId);
-  }
-
   function toggleThinking(layerId: string) {
     setExpandedThinking((current) => {
       const next = new Set(current);
@@ -515,10 +513,6 @@ export default function EntitiesPanel() {
         next.delete(layerId);
       } else {
         next.add(layerId);
-        if (expandedLayerId !== layerId) {
-          setExpandedLayerIdSynced(layerId);
-          void fetchAndSetArtifacts(layerId);
-        }
       }
       return next;
     });
@@ -540,8 +534,6 @@ export default function EntitiesPanel() {
       const data = await readJson<CreateSessionResponse>(response);
 
       setLayers((current) => [...current, data.session]);
-      setExpandedLayerIdSynced(data.session.id);
-      setExpandedArtifacts(null);
       openStream(data.session.id, 'gpt-5.5', bookId);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Failed to create reading session");
@@ -552,6 +544,8 @@ export default function EntitiesPanel() {
 
   const lineCount = prompt.split("\n").length;
   const textareaRows = Math.min(Math.max(lineCount, 1), 20);
+  const drawerSessionId = streamingLayerId ?? layers[layers.length - 1]?.id ?? null;
+  const drawerArtifacts = drawerSessionId ? (layerArtifacts[drawerSessionId] ?? null) : null;
 
   if (!onBookPage) {
     return (
@@ -578,12 +572,7 @@ export default function EntitiesPanel() {
             <button
               type="button"
               className={styles.artifactsButton}
-              onClick={() => {
-                if (!expandedArtifacts && expandedLayerId) {
-                  void fetchAndSetArtifacts(expandedLayerId);
-                }
-                setArtifactsDrawerOpen(true);
-              }}
+              onClick={() => setArtifactsDrawerOpen(true)}
               title="Pokaż artefakty"
             >
               ◧ Artefakty
@@ -592,7 +581,42 @@ export default function EntitiesPanel() {
         </div>
       </header>
 
-      <div className={styles.chatArea}>
+      {/* Conversation picker */}
+      {layers.length > 0 && (
+        <div className={styles.convPicker}>
+          <div className={styles.convPickerList}>
+            {layers.map((layer, idx) => (
+              <button
+                key={layer.id}
+                type="button"
+                className={[
+                  styles.convPickerChip,
+                  (activePickerSessionId ?? layers[layers.length - 1]?.id) === layer.id
+                    ? styles.convPickerChipActive
+                    : "",
+                  streamingLayerId === layer.id ? styles.convPickerChipStreaming : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                onClick={() => scrollToSession(layer.id)}
+                title={layer.goal.prompt}
+              >
+                {idx + 1}. {layer.goal.prompt.slice(0, 28)}{layer.goal.prompt.length > 28 ? "…" : ""}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className={styles.newConvButton}
+            onClick={focusNewConversation}
+            title="Nowa konwersacja"
+          >
+            ＋
+          </button>
+        </div>
+      )}
+
+      <div ref={chatAreaRef} className={styles.chatArea}>
         <div className={styles.conversationList}>
           {masterHandoff && (
           <div className={styles.masterHandoffBubble}>
@@ -611,20 +635,19 @@ export default function EntitiesPanel() {
         )}
 
         {layers.map((layer) => (
-          <div key={layer.id} className={styles.conversationPair}>
-            {/* USER BUBBLE */}
-            <div className={styles.userBubble}>
+          <Fragment key={layer.id}>
+            {/* USER MESSAGE */}
+            <div data-session-id={layer.id} className={styles.userBubble}>
               <p className={styles.bubbleText}>{layer.goal.prompt}</p>
               <time className={styles.bubbleTime}>{formatTimestamp(layer.createdAt)}</time>
             </div>
 
-            {/* ASSISTANT GROUP */}
+            {/* ASSISTANT */}
             <div className={styles.assistantWrapper}>
               <time className={styles.assistantMeta}>{formatTimestamp(layer.createdAt)}</time>
 
-              {/* ASSISTANT BUBBLE */}
+              {/* STATUS BUBBLE — ephemeral, collapsible */}
               <div className={styles.assistantBubble}>
-                {/* Intent badge */}
                 {layerIntents[layer.id] && (
                   <div className={styles.intentBadge}>
                     <span className={styles.intentTypeChip}>
@@ -633,8 +656,6 @@ export default function EntitiesPanel() {
                     <span className={styles.intentGoal}>{layerIntents[layer.id].strategicGoal}</span>
                   </div>
                 )}
-
-                {/* Thinking toggle */}
                 <button
                   type="button"
                   className={styles.thinkingToggle}
@@ -643,16 +664,14 @@ export default function EntitiesPanel() {
                   <span className={styles.thinkingIcon}>🧠</span>
                   {streamingLayerId === layer.id
                     ? `${(layerEvents[layer.id] ?? []).length} zdarzeń`
-                    : expandedArtifacts && expandedLayerId === layer.id
-                      ? `${expandedArtifacts.notes.length} notatek`
+                    : layerArtifacts[layer.id]
+                      ? `${layerArtifacts[layer.id].notes.length} notatek`
                       : "Proces"
                   }
                   <span className={styles.thinkingArrow}>
                     {expandedThinking.has(layer.id) ? "▲" : "▼"}
                   </span>
                 </button>
-
-                {/* Thinking content */}
                 {expandedThinking.has(layer.id) && (
                   <div className={styles.thinkingContent}>
                     {(streamingLayerId === layer.id || layerEvents[layer.id] !== undefined) ? (
@@ -673,25 +692,23 @@ export default function EntitiesPanel() {
                           </li>
                         )}
                       </ol>
-                    ) : expandedArtifactsLoading && expandedLayerId === layer.id ? (
+                    ) : artifactsLoadingIds.has(layer.id) ? (
                       <p className={styles.loadingText}>Ładowanie...</p>
-                    ) : expandedArtifacts && expandedLayerId === layer.id ? (
+                    ) : layerArtifacts[layer.id] ? (
                       <div className={styles.artifactsSummary}>
                         <p className={styles.artifactsSummaryLine}>
-                          {expandedArtifacts.notes.length} notatek · status: {layer.status}
+                          {layerArtifacts[layer.id].notes.length} notatek · status: {layer.status}
                         </p>
                       </div>
                     ) : null}
                   </div>
                 )}
-
-                {/* Error */}
                 {streamingLayerId === layer.id && streamError && (
                   <p className={styles.errorText}>{streamError}</p>
                 )}
               </div>
 
-              {/* ANSWER BUBBLE */}
+              {/* ANSWER BUBBLE — always visible */}
               <div className={styles.answerBubble}>
                 {layerAnswers[layer.id] ? (
                   <div className={styles.finalAnswerText}>
@@ -704,24 +721,18 @@ export default function EntitiesPanel() {
                   </p>
                 ) : !isTerminalStatus(layer.status) ? (
                   <p className={styles.loadingText}>Oczekuje na zakończenie...</p>
-                ) : expandedArtifacts?.handoff && expandedLayerId === layer.id ? (
+                ) : artifactsLoadingIds.has(layer.id) ? (
+                  <p className={styles.loadingText}>Ładowanie odpowiedzi...</p>
+                ) : layerArtifacts[layer.id]?.handoff ? (
                   <div className={styles.finalAnswerText}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{expandedArtifacts.handoff.executiveSummary}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{layerArtifacts[layer.id].handoff!.executiveSummary}</ReactMarkdown>
                   </div>
-                ) : expandedArtifacts && expandedLayerId === layer.id && !expandedArtifacts.handoff ? (
+                ) : layerArtifacts[layer.id] ? (
                   <p className={styles.loadingText}>Sesja zakończona bez pełnej analizy.</p>
-                ) : layer.id === expandedLayerId ? null : (
-                  <button
-                    type="button"
-                    className={styles.loadLayerButton}
-                    onClick={() => void handleToggleLayer(layer.id)}
-                  >
-                    Pokaż wyniki →
-                  </button>
-                )}
+                ) : null}
               </div>
             </div>
-          </div>
+          </Fragment>
         ))}
 
         {layers.length === 0 && !isLoading && (
@@ -736,6 +747,7 @@ export default function EntitiesPanel() {
           <div className={styles.inputWrap}>
             <textarea
               className={`${styles.promptInput}${lineCount <= 1 ? ` ${styles.promptInputCentered}` : ""}`}
+              ref={promptRef}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="Co analizujemy? Wprowadź cel czytania, pytanie lub instrukcję dla czytelnika..."
@@ -762,7 +774,7 @@ export default function EntitiesPanel() {
         </div>
       </div>
 
-      {artifactsDrawerOpen && expandedArtifacts && (
+      {artifactsDrawerOpen && drawerArtifacts && (
         <div className={styles.drawer}>
           <div className={styles.drawerOverlay} onClick={() => setArtifactsDrawerOpen(false)} />
           <div className={styles.drawerPanel}>
@@ -777,7 +789,7 @@ export default function EntitiesPanel() {
               </button>
             </div>
             <div className={styles.drawerBody}>
-              {expandedArtifacts.notes.map((note, i) => (
+              {drawerArtifacts.notes.map((note, i) => (
                 <div key={note.id} className={styles.drawerNote}>
                   <h4>Note {i + 1}</h4>
                   <p>{note.summary}</p>
@@ -786,11 +798,11 @@ export default function EntitiesPanel() {
                   )}
                 </div>
               ))}
-              {expandedArtifacts.handoff && (
+              {drawerArtifacts.handoff && (
                 <div className={styles.drawerHandoff}>
                   <h4>Final Handoff</h4>
-                  <p>{expandedArtifacts.handoff.executiveSummary}</p>
-                  {expandedArtifacts.handoff.conclusions.map((c, i) => (
+                  <p>{drawerArtifacts.handoff.executiveSummary}</p>
+                  {drawerArtifacts.handoff.conclusions.map((c, i) => (
                     <div key={i}>[{c.statementKind}] <strong>{c.title}</strong>: {c.summary}</div>
                   ))}
                 </div>

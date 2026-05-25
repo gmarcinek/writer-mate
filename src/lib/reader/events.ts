@@ -83,6 +83,7 @@ const readerSessionEventBaseSchema = z.object({
     "error",
     "answer_chunk",
     "intent_recognized",
+    "hint_emitted",
   ]),
   sessionId: z.string().uuid(),
   timestamp: z.string().datetime(),
@@ -160,6 +161,16 @@ const intentRecognizedEventSchema = readerSessionEventBaseSchema.extend({
   focusAreas: z.array(z.string()),
 });
 
+const hintEmittedEventSchema = readerSessionEventBaseSchema.extend({
+  type: z.literal("hint_emitted"),
+  hintId: z.string().uuid(),
+  description: z.string().min(1),
+  startLine: z.number().int().min(1),
+  endLine: z.number().int().min(1),
+  fragment: z.string(),
+  proposedChange: z.string().min(1),
+});
+
 export const readerSessionEventSchema = z.discriminatedUnion("type", [
   statusEventSchema,
   toolCallEventSchema,
@@ -171,6 +182,7 @@ export const readerSessionEventSchema = z.discriminatedUnion("type", [
   errorEventSchema,
   answerChunkEventSchema,
   intentRecognizedEventSchema,
+  hintEmittedEventSchema,
 ]);
 
 export type ReaderSessionEvent = z.infer<typeof readerSessionEventSchema>;

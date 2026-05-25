@@ -2,6 +2,10 @@
 @import "../design-system/tokens.css";
 @plugin "@tailwindcss/typography";
 
+/* CSS Custom Highlight API — hint selection */
+/* Note: ::highlight() is applied via JavaScript only; this rule is intentionally left as a comment
+   to avoid CSS parser errors in older toolchains. The highlight is registered in PaperToggle.tsx. */
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -25,7 +29,7 @@ body {
 .app-shell {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
-  grid-template-columns: 280px minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(720px, 2fr) minmax(240px, 1fr) 2fr;
   grid-template-areas: "left   main   right";
   height: 100vh;
   width: 100%;
@@ -33,16 +37,22 @@ body {
 }
 
 .app-shell[data-sidebar-collapsed="true"] {
-  grid-template-columns: 72px minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(720px, 2fr) minmax(240px, 1fr) 2fr;
 }
 
 .app-shell[data-sidebar-hidden="true"] {
-  grid-template-columns: minmax(720px, 1fr) 2fr;
+  grid-template-columns: minmax(720px, 2fr) 2fr;
   grid-template-areas: "main right";
+}
+
+.app-shell[data-sidebar-hidden="true"][data-hints-open="true"] {
+  grid-template-columns: minmax(720px, 2fr) minmax(240px, 1fr) 2fr;
+  grid-template-areas: "main hints right";
 }
 
 .app-shell-left   { grid-area: left; min-height: 0; }
 .app-shell-main   { grid-area: main; overflow: auto; min-height: 0; }
+.app-shell-hints  { grid-area: hints; min-height: 0; }
 .app-shell-right  { grid-area: right; min-height: 0; }
 
 
@@ -58,11 +68,16 @@ body {
   .app-shell[data-sidebar-hidden="true"] {
     grid-template-columns: 1fr 1fr;
   }
+
+  .app-shell[data-sidebar-hidden="true"][data-hints-open="true"] {
+    grid-template-columns: minmax(0, 1fr) minmax(200px, 0.4fr) 320px;
+  }
 }
 
 @media (max-width: 960px) {
   .app-shell,
-  .app-shell[data-sidebar-collapsed="true"] {
+  .app-shell[data-sidebar-collapsed="true"],
+  .app-shell[data-sidebar-hidden="true"][data-hints-open="true"] {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
     grid-template-areas:
@@ -72,6 +87,7 @@ body {
   }
 
   .app-shell-left,
+  .app-shell-hints,
   .app-shell-right {
     border-left: none !important;
     border-right: none !important;

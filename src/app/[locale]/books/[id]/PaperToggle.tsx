@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Minimap from "./Minimap";
@@ -11,6 +11,66 @@ const FORMATS: { id: Format; label: string; width: number; padding: string }[] =
   { id: "a5", label: "A5", width: 600, padding: "48px 56px" },
   { id: "a4", label: "A4", width: 794, padding: "72px 80px" },
 ];
+
+type HintSelectDetail = {
+  fragment: string;
+  startLine: number;
+  endLine: number;
+};
+
+/** Find text nodes under root that together contain needle. Returns a DOM Range or null. */
+function findTextRange(root: Element, needle: string): Range | null {
+  if (!needle.trim()) return null;
+
+  const trimmed = needle.trim().slice(0, 200); // cap to avoid expensive search
+
+  // Build concatenated text + offsets map
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  let node: Node | null;
+  while ((node = walker.nextNode())) nodes.push(node as Text);
+
+  let combined = "";
+  const offsets: number[] = []; // start offset of each node in combined
+  for (const n of nodes) {
+    offsets.push(combined.length);
+    combined += n.textContent ?? "";
+  }
+
+  const idx = combined.indexOf(trimmed);
+  if (idx === -1) return null;
+
+  const endIdx = idx + trimmed.length;
+
+  // Find which nodes startLine and end fall in
+  let startNode: Text | null = null;
+  let startOffset = 0;
+  let endNode: Text | null = null;
+  let endOffset = 0;
+
+  for (let i = 0; i < nodes.length; i++) {
+    const nodeStart = offsets[i];
+    const nodeEnd = nodeStart + (nodes[i].textContent?.length ?? 0);
+
+    if (!startNode && nodeEnd > idx) {
+      startNode = nodes[i];
+      startOffset = idx - nodeStart;
+    }
+
+    if (!endNode && nodeEnd >= endIdx) {
+      endNode = nodes[i];
+      endOffset = endIdx - nodeStart;
+      break;
+    }
+  }
+
+  if (!startNode || !endNode) return null;
+
+  const range = document.createRange();
+  range.setStart(startNode, startOffset);
+  range.setEnd(endNode, endOffset);
+  return range;
+}
 
 export default function PaperToggle({
   title,
@@ -24,6 +84,60 @@ export default function PaperToggle({
   const [format, setFormat] = useState<Format>("a5");
   const fmt = FORMATS.find((f) => f.id === format)!;
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Respond to hint:select events from HintsPanel
+  useEffect(() => {
+    // Inject ::highlight(hint-highlight) style once
+    const STYLE_ID = "hint-highlight-style";
+    if (!document.getElementById(STYLE_ID)) {
+      const style = document.createElement("style");
+      style.id = STYLE_ID;
+      style.textContent = "::highlight(hint-highlight) { background-color: rgba(255, 220, 50, 0.45); color: inherit; }";
+      document.head.appendChild(style);
+    }
+
+    function onHintSelect(e: Event) {
+      const { fragment } = (e as CustomEvent<HintSelectDetail>).detail;
+      const contentEl = contentRef.current;
+      const scrollEl = scrollRef.current;
+      if (!contentEl || !scrollEl) return;
+
+      // Clear previous highlights
+      if (typeof CSS !== "undefined" && "highlights" in CSS) {
+        CSS.highlights.delete("hint-highlight");
+      }
+
+      const range = findTextRange(contentEl, fragment);
+      if (!range) return;
+
+      // Apply CSS Custom Highlight API if available
+      if (typeof CSS !== "undefined" && "highlights" in CSS && typeof Highlight !== "undefined") {
+        CSS.highlights.set("hint-highlight", new Highlight(range));
+      }
+
+      // Scroll the start of the range into view
+      try {
+        const rect = range.getBoundingClientRect();
+        const scrollRect = scrollEl.getBoundingClientRect();
+        const relativeTop = rect.top - scrollRect.top + scrollEl.scrollTop;
+        scrollEl.scrollTo({
+          top: relativeTop - scrollRect.height / 3,
+          behavior: "smooth",
+        });
+      } catch {
+        // ignore scroll errors
+      }
+    }
+
+    window.addEventListener("hint:select", onHintSelect);
+    return () => {
+      window.removeEventListener("hint:select", onHintSelect);
+      if (typeof CSS !== "undefined" && "highlights" in CSS) {
+        CSS.highlights.delete("hint-highlight");
+      }
+    };
+  }, []);
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
@@ -129,6 +243,7 @@ export default function PaperToggle({
                   Content
                 </p>
                 <div
+                  ref={contentRef}
                   data-minimap-content
                   style={{
                     fontSize: "15px",
