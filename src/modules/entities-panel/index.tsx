@@ -190,6 +190,8 @@ function createLogItem(event: ReaderSessionEvent): EventLogItem | null {
       };
     case "coverage":
       return null;
+    case "answer_chunk":
+      return null;
     default:
       return null;
   }
@@ -215,6 +217,7 @@ export default function EntitiesPanel() {
   const onBookPage = Boolean(bookId) && isBookPage(pathname);
   const eventSourceRef = useRef<EventSource | null>(null);
   const expandedLayerIdRef = useRef<string | null>(null);
+  const lastStreamedLayerIdRef = useRef<string | null>(null);
 
   const [layers, setLayers] = useState<ReaderSession[]>([]);
   const [masterHandoff, setMasterHandoff] = useState<ReaderMasterHandoff | null>(null);
@@ -231,6 +234,8 @@ export default function EntitiesPanel() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [finalAnswer, setFinalAnswer] = useState("");
+  const [isStreamingAnswer, setIsStreamingAnswer] = useState(false);
 
   // Keep ref in sync with state so closures always have current value
   expandedLayerIdRef.current = expandedLayerId;
@@ -259,6 +264,8 @@ export default function EntitiesPanel() {
       setExpandedArtifacts(null);
       setStreamingLayerId(null);
       setEvents([]);
+      setFinalAnswer("");
+      setIsStreamingAnswer(false);
       setLoadError(null);
       setStreamError(null);
       setIsLoading(false);
@@ -361,6 +368,16 @@ export default function EntitiesPanel() {
     eventSourceRef.current = null;
     setStreamError(null);
     setStreamingLayerId(sessionId);
+    setFinalAnswer("");
+    setIsStreamingAnswer(false);
+    lastStreamedLayerIdRef.current = sessionId;
+
+    // Auto-expand thinking section for the new stream
+    setExpandedThinking((current) => {
+      const next = new Set(current);
+      next.add(sessionId);
+      return next;
+    });
 
     const url = new URL("/api/reader/sessions/stream", window.location.origin);
     url.searchParams.set("sessionId", sessionId);
@@ -372,6 +389,16 @@ export default function EntitiesPanel() {
     const handleEvent = (rawEvent: MessageEvent<string>) => {
       const payload = JSON.parse(rawEvent.data) as ReaderSessionEvent;
       appendEvent(payload);
+
+      if (payload.type === "answer_chunk") {
+        if (payload.done) {
+          setIsStreamingAnswer(false);
+        } else {
+          setIsStreamingAnswer(true);
+          setFinalAnswer((prev) => prev + payload.text);
+        }
+        return;
+      }
 
       if (payload.type === "status") {
         setLayers((current) =>
@@ -398,6 +425,7 @@ export default function EntitiesPanel() {
       }
     };
 
+    source.addEventListener("answer_chunk", handleEvent as EventListener);
     source.addEventListener("status", handleEvent as EventListener);
     source.addEventListener("thinking", handleEvent as EventListener);
     source.addEventListener("tool_call", handleEvent as EventListener);
@@ -558,7 +586,7 @@ export default function EntitiesPanel() {
               {/* Thinking content */}
               {expandedThinking.has(layer.id) && (
                 <div className={styles.thinkingContent}>
-                  {streamingLayerId === layer.id ? (
+                  {streamingLayerId === layer.id || lastStreamedLayerIdRef.current === layer.id ? (
                     <ol className={styles.eventList}>
                       {events.map((event) => (
                         <li key={event.id} className={styles.eventItem} data-category={event.category}>
@@ -581,19 +609,22 @@ export default function EntitiesPanel() {
 
               {/* Final answer */}
               <div className={styles.finalAnswer}>
-                {streamingLayerId === layer.id ? (
+                {finalAnswer && lastStreamedLayerIdRef.current === layer.id ? (
+                  <p className={styles.finalAnswerText}>
+                    {finalAnswer}
+                    {isStreamingAnswer && <span className={styles.streamingCursor}> ▋</span>}
+                  </p>
+                ) : streamingLayerId === layer.id ? (
                   <p className={styles.streamingAnswer}>
                     {events.filter((e) => e.category === "status").at(-1)?.title ?? "Trwa czytanie..."}
                   </p>
-                ) : expandedArtifactsLoading && expandedLayerId === layer.id ? (
-                  <p className={styles.loadingText}>Ładowanie...</p>
-                ) : expandedArtifacts?.handoff && expandedLayerId === layer.id ? (
+                ) : !isTerminalStatus(layer.status) ? (
+                  <p className={styles.loadingText}>Oczekuje na zakończenie...</p>
+                ) : expandedArtifacts?.handoff && expandedLayerId === layer.id && !lastStreamedLayerIdRef.current ? (
                   <p className={styles.finalAnswerText}>
                     {expandedArtifacts.handoff.executiveSummary}
                   </p>
-                ) : !isTerminalStatus(layer.status) ? (
-                  <p className={styles.loadingText}>Oczekuje na zakończenie...</p>
-                ) : expandedArtifacts && expandedLayerId === layer.id && !expandedArtifacts.handoff ? (
+                ) : expandedArtifacts && expandedLayerId === layer.id && !expandedArtifacts.handoff && !lastStreamedLayerIdRef.current ? (
                   <p className={styles.loadingText}>Sesja zakończona bez pełnej analizy.</p>
                 ) : layer.id === expandedLayerId ? null : (
                   <button

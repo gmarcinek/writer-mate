@@ -81,6 +81,7 @@ const readerSessionEventBaseSchema = z.object({
     "thinking",
     "handoff_ready",
     "error",
+    "answer_chunk",
   ]),
   sessionId: z.string().uuid(),
   timestamp: z.string().datetime(),
@@ -144,6 +145,12 @@ const errorEventSchema = readerSessionEventBaseSchema.extend({
   message: z.string().min(1),
 });
 
+const answerChunkEventSchema = readerSessionEventBaseSchema.extend({
+  type: z.literal("answer_chunk"),
+  text: z.string(),
+  done: z.boolean(),
+});
+
 export const readerSessionEventSchema = z.discriminatedUnion("type", [
   statusEventSchema,
   toolCallEventSchema,
@@ -153,6 +160,7 @@ export const readerSessionEventSchema = z.discriminatedUnion("type", [
   thinkingEventSchema,
   handoffReadyEventSchema,
   errorEventSchema,
+  answerChunkEventSchema,
 ]);
 
 export type ReaderSessionEvent = z.infer<typeof readerSessionEventSchema>;

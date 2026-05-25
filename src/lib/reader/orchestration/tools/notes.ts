@@ -66,18 +66,6 @@ export function buildNotesTools(
               coverageRangeCount: 0,
             })
           );
-          // Auto-finish: if the reading head is at or past the end of the source,
-          // synthesize and close the session immediately without waiting for the model.
-          const atEof =
-            state.currentCursor != null &&
-            state.currentCursor.endLine >= recon.stats.totalLines;
-          if (atEof) {
-            try {
-              await doSynthesisAndFinishWithMaster(state.currentCursor);
-            } catch {
-              // Auto-finish failure is non-fatal; the model can still call finish() manually.
-            }
-          }
           return result;
         } catch (error) {
           await emit?.(

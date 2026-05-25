@@ -54,29 +54,91 @@ function formatRecon(recon: ReaderReconBrief) {
   ].join("\n");
 }
 
-export function buildReaderSystemPrompt() {
+export function buildReaderSystemPrompt(args: {
+  recon: ReaderReconBrief;
+  session: ReaderSession;
+}) {
+  const filename = args.recon.title;
+  const totalSize = args.recon.stats.totalCharacters;
+  const totalLines = args.recon.stats.totalLines;
+  const analysisGoal = formatGoal(args.session.goal);
+
   return [
-    "You are the server-owned exhaustive reader for writer-mate.",
-    "Read the source exhaustively. Prefer sequential traversal unless recon strongly indicates a better bounded jump.",
-    "Use tools instead of inventing source content.",
-    "Persist structured notes with evidence as you progress.",
-    "Write all note content (summary, facts, inferences, questions, actions) in the same language as the source text.",
-    "When you have finished reading, call finish() to close the session.",
-    "Adaptive chunk sizes: start every new session with readLines windows of 100 lines. After each successful read, you may double the window size. Maximum chunk size is 3000 lines per readLines call.",
-    "Treat facts as directly supported by evidence. Put uncertainty into inferences, unresolvedQuestions, caveats, or limitations.",
-    "Note markers — prefix every entry: facts with [FAKT], inferences with [HIPOTEZA] (speculation, hypothesis) or [INTERPRETACJA] (interpretive/literary reading) as appropriate.",
-    "Fragment meta-impression — begin every note summary with a compact one-liner describing the fragment's character, e.g.: 'L102-145: nastrój=melancholijny, klimat=napięty, emocje=7/10, gęstość=wysoka.' Then continue with the substantive summary.",
-    "Use searchPhrases for lexical discovery and jumpToGap when you need to revisit persisted unvisited ranges.",
-    "For tool calls, include every parameter key required by the schema. When a value is not used, pass null instead of omitting the key.",
-    "When calling saveNotes for a new note, set noteId to null.",
-    "Keep each saveNotes payload compact.",
-    "Use at most: summary under 800 chars, up to 8 facts, 6 inferences, 5 unresolved questions, 5 follow-up actions, and 4 evidence items.",
-    "For saveNotes evidence, prefer anchor ranges over long quotations.",
-    "Set evidence.quote to null unless a short literal excerpt is essential.",
-    "If you include evidence.quote, keep it to a single line, plain text only, with no raw newlines, and keep it short.",
-    "Do not paste large source passages into tool arguments.",
-    "If the note would be too large, save a smaller interim note now and continue reading.",
-    "Do not produce markdown fences or prose outside tool usage.",
+    `Czytasz duży plik '${filename}' (${totalSize} znaków, ${totalLines} linii).`,
+    "Masz do dyspozycji narzędzia nawigacji — SAM decydujesz ile czytać, co pomijać, gdzie skakać.",
+    "Twoje notatki będą zapisane do plików roboczych i wykorzystane później przez innego agenta.",
+    "Traktuj każde saveNotes() jak FORMALNY HANDOFF, nie jak prywatny szkic.",
+    "",
+    "CEL CZYTANIA:",
+    analysisGoal,
+    "",
+    "TWOJE NARZĘDZIA:",
+    "- readLines(startLine, endLine) — czyta linie od startLine do endLine. Max 3000 linii na raz. Dla dużych plików czytaj odważnie (500-2000).",
+    "- skipLines(count) — przesuwa kursor bez czytania. Używaj gdy treść się powtarza.",
+    "- jumpToLine(requestedLine) — skok na konkretną linię. Używaj do próbkowania środka/końca.",
+    "- jumpToGap() — skok do pierwszego nieodwiedzonego zakresu. Używaj do uzupełniania luk w pokryciu.",
+    "- searchPhrases(query) — szuka fraz w tekście. Używaj do szybkiego zlokalizowania kluczowych terminów.",
+    "- saveNotes(...) — zapisuje notatkę. WYWOŁUJ ZAWSZE. Dodawaj odniesienia do linii!",
+    "- finish() — kończy sesję. Upewnij się że wcześniej zapisałeś notatki.",
+    "",
+    "STRATEGIA CZYTANIA:",
+    "1. Zacznij od readLines(1, 200) — zorientuj się w strukturze i formacie.",
+    "2. Dostosuj tempo do treści:",
+    "   - Powtarzalne dane (JSON array, CSV) → przeczytaj próbkę (500-1000 linii), skip duże bloki, próbkuj środek i koniec.",
+    "   - Tekst narracyjny → czytaj porcjami 200-500, notuj kluczowe informacje.",
+    "   - Tekst prawny → czytaj porcjami 200-500, notuj kluczowe informacje, ewidencje.",
+    "   - Logi/kod → szukaj wzorców, błędów, kluczowych sekcji.",
+    "   - Mieszany format → adaptuj się do każdej sekcji.",
+    "3. Próbkuj: początek → 25% → 50% → 75% → koniec. Nie musisz czytać linia po linii.",
+    "4. Jeśli zebrałeś wystarczające informacje — finish(). Nie musisz czytać WSZYSTKIEGO.",
+    "",
+    "FORMAT NOTATEK (saveNotes) — FORMALNY HANDOFF z odniesieniami:",
+    "Każda notatka powinna być samowystarczalna. Pola narzędzia saveNotes:",
+    "",
+    "summary (max 800 znaków):",
+    "  Zacznij od zakresu pokrycia: 'Zakres: L{start}-{end} przeczytane[, L{x}-{y} pominięte jako powtarzalne][, skok do L{z}]'.",
+    "  Następnie mapa struktury: 'Struktura: L{a}: nagłówek, L{b}-{c}: dane, ...'.",
+    "  Zakończ zwięzłym obrazem ogólnym fragmentu.",
+    "",
+    "facts (max 8, każdy max 240 znaków):",
+    "  Każdy fakt MUSI zaczynać się od numeru linii: '[L{nr}] treść faktu' lub '[L{start}-{end}] treść'.",
+    "  Oznacz: [FAKT] — wynika wprost z tekstu.",
+    "",
+    "inferences (max 6, każdy max 240 znaków):",
+    "  Wnioski interpretacyjne i hipotezy — z numerem linii jako podstawą.",
+    "  Oznacz: [INTERPRETACJA] — wniosek logiczny, [HIPOTEZA] — spekulacja.",
+    "",
+    "evidence (max 4):",
+    "  Kluczowe cytaty dosłowne (krótkie, 1 linia) z zakresu linii. Używaj pola quote TYLKO gdy cytat jest istotny.",
+    "",
+    "unresolvedQuestions (max 5):",
+    "  Luki — czego jeszcze nie wiesz. Podaj konkretne linie do sprawdzenia: 'Nieznane: L{x}-{y} — co zawiera ta sekcja?'",
+    "",
+    "followUpActions (max 5):",
+    "  Dalsze kroki — jakie linie warto przeczytać dalej i dlaczego.",
+    "",
+    "Przykład dobrej notatki (summary):",
+    "  'Zakres: L1-200 przeczytane, potem skip L201-1200, skok do L1201.",
+    "  Struktura: L1-5 nagłówek JSON array, L6-5000 rekordy, brak osobnego podsumowania.",
+    "  Pierwsze 50 rekordów: statusy Open(32), Closed(12), InProgress(6). Wzorzec: ~4 linie/rekord.'",
+    "",
+    "Używaj saveNotes:",
+    "- po pierwszym rozpoznaniu struktury (początek pliku),",
+    "- po każdej istotnej sekcji,",
+    "- po dużym skipie lub jumpie,",
+    "- gdy znajdziesz ważne ustalenia,",
+    "- przed finish() — zapisz NOTATKĘ KOŃCOWĄ z pełnym pokryciem i głównymi ustaleniami.",
+    "",
+    "ZASADY:",
+    "- Pisz notatki w języku tekstu źródłowego.",
+    "- Bądź efektywny — nie czytaj linia po linii tego co jest powtarzalne.",
+    "- ZAWSZE dodawaj numery linii w notatkach.",
+    "- Nie pisz metakomentarzy o procesie — tylko fakty użyteczne dla następnego agenta.",
+    "- Jeśli zrobiłeś skip lub jump, odnotuj to jawnie w summary.",
+    "- Jeśli treść jest nieczytelna lub uszkodzona — zanotuj i idź dalej.",
+    "- Nie generalizuj wyników z próbek bez oznaczenia jako PRÓBKA lub HIPOTEZA.",
+    "- Gdy wywołujesz saveNotes dla nowej notatki, ustaw noteId na null.",
+    "- Nie generuj treści poza wywołaniami narzędzi.",
   ].join("\n");
 }
 
@@ -87,28 +149,15 @@ export function buildReaderRunPrompt(args: {
 }) {
   const modeInstruction =
     args.session.goal.mode === ReaderMode.Exhaustive
-      ? "This run is exhaustive-first. Reach formal end-of-source coverage before concluding."
-      : "This run is goal-directed, but still preserve explicit coverage accounting.";
+      ? "Ten przebieg jest wyczerpujący — osiągnij formalne pokrycie całego źródła przed zakończeniem."
+      : "Ten przebieg jest zorientowany na cel — czytaj efektywnie, zatrzymaj się gdy cel zostanie zrealizowany."
 
   const resumeInstruction =
     args.existingNoteCount > 0
-      ? `Resume the existing session. ${args.existingNoteCount} notes already exist. Continue from the persisted cursor and avoid duplicating prior notes unless you are superseding them.`
-      : "This is a new session. Start from the beginning of the source unless recon suggests an initial bounded jump is needed to orient yourself.";
+      ? `Wznów istniejącą sesję. Masz już ${args.existingNoteCount} notatek. Kontynuuj od zapisanego kursora, nie duplikuj poprzednich notatek.`
+      : "To jest nowa sesja. Zacznij od początku źródła — readLines(1, 200)."
 
-  return [
-    modeInstruction,
-    resumeInstruction,
-    "Reading goal:",
-    formatGoal(args.session.goal),
-    "Reconnaissance:",
-    formatRecon(args.recon),
-    "Operational rules:",
-    "1. Read bounded windows and advance coverage deliberately. Start with 100-line chunks; double the window after each successful read up to a maximum of 3000 lines per call.",
-    "2. Save interim notes whenever you complete a meaningful span or section.",
-    "3. When you have finished reading everything, call finish() to close the session.",
-    "4. Keep saveNotes payloads compact. Prefer evidence ranges plus short factual anchors over long quoted excerpts.",
-    "5. If a note grows too large, split it into multiple smaller notes instead of sending one large saveNotes call.",
-  ].join("\n\n");
+  return [modeInstruction, resumeInstruction].join("\n");
 }
 
 export function buildReaderSynthesisPrompt(args: {
@@ -117,23 +166,79 @@ export function buildReaderSynthesisPrompt(args: {
   notesDigest: string;
   coverageDigest: string;
 }) {
+  const filename = args.recon.title;
+  const totalSize = args.recon.stats.totalCharacters;
+  const analysisGoal = formatGoal(args.session.goal);
+
   return [
-    "Synthesize a final reader handoff from the persisted notes.",
-    "Write all handoff content (executiveSummary, conclusions, gaps, caveats, limitations, nextQuestions) in the same language as the source text.",
-    "Return strict JSON only. No markdown fences, no commentary.",
-    "The JSON must contain: status, executiveSummary, conclusions, gaps, caveats, limitations, nextQuestions.",
-    "Each conclusion must contain: title, summary, statementKind, confidence, evidenceIds.",
-    "In conclusion summaries, preserve the [FAKT] / [HIPOTEZA] / [INTERPRETACJA] markers when referencing specific claims from the notes.",
-    "Choose status='complete' only when the coverage digest shows high visitedPercent and no significant unvisited ranges remain. Otherwise choose 'partial'.",
-    "Session goal:",
-    formatGoal(args.session.goal),
+    `Przeczytałeś duży plik '${filename}' (${totalSize} znaków).`,
+    "Poniżej są notatki z czytania.",
+    "",
+    "CEL CZYTANIA:",
+    analysisGoal,
+    "",
+    "ZADANIE: Stwórz jeden syntetyczny HANDOFF — tak żeby kolejny agent mógł go przeczytać i natychmiast odtworzyć kontekst BEZ ponownego czytania całego pliku.",
+    "",
+    "Zwróć ścisły JSON bez markdown fences, bez komentarzy.",
+    "JSON musi zawierać: status, executiveSummary, conclusions, gaps, caveats, limitations, nextQuestions.",
+    "Każdy element conclusions musi zawierać: title, summary, statementKind, confidence, evidenceIds.",
+    "",
+    "Pole executiveSummary — pełny syntetyczny dokument zawierający WSZYSTKIE poniższe sekcje:",
+    "",
+    "**Status:** COMPLETE albo PARTIAL.",
+    "COMPLETE gdy notatki pokrywają wszystko potrzebne do celu. PARTIAL gdy zostały istotne luki.",
+    "",
+    "**Podsumowanie:** 2-3 zdania — co zawiera plik, jaki rodzaj treści, ogólny obraz.",
+    "",
+    "**Cel czytania:** 1 zdanie — czego dokładnie szukano.",
+    "",
+    "**Pokrycie czytania:**",
+    "- Jakie zakresy zostały przeczytane, jakie pominięte, jakie tylko próbkowane.",
+    "- Jeśli czytanie było częściowe, napisz to wprost.",
+    "",
+    "**Spis treści pliku (TOC):** TYLKO dla dokumentów z rozdziałami/sekcjami (regulaminy, raporty, umowy, dokumentacja).",
+    "POMIŃ dla danych tabelarycznych (JSON array, CSV, logi) — tam wystarczy mapa struktury.",
+    "Format: Nazwa rozdziału/sekcji — L{start}-L{end}",
+    "",
+    "**Mapa struktury pliku:**",
+    "- Jakie sekcje/bloki zawiera plik i w których liniach.",
+    "- Format danych, kluczowe kolumny/pola.",
+    "- Dla danych tabelarycznych: schemat rekordu, kluczowe pola, szacowana liczba rekordów.",
+    "",
+    "**Kluczowe ustalenia:** wypunktowane konkrety odpowiadające celowi czytania. Przy każdym — odniesienie do linii.",
+    "Przy ważnych punktach oznacz: [FAKT] — wynika wprost z tekstu, [INTERPRETACJA] — logiczny wniosek, [HIPOTEZA] — możliwe ale niepewne.",
+    "",
+    "**Ważne cytaty:** dosłowne fragmenty z pliku, które mogą być potrzebne (z numerami linii).",
+    "",
+    "**Uwagi i anomalie:** cokolwiek nietypowego wykrytego w treści (lub 'brak').",
+    "",
+    "**Granice zakresu / czego nie zakładać:**",
+    "- Co zostało potwierdzone.",
+    "- Czego nie pokrywa czytanie.",
+    "- Co było tylko próbkowane.",
+    "- Jakich wniosków NIE należy uogólniać bez powrotu do źródła.",
+    "",
+    "Pole conclusions — kluczowe wnioski tematyczne:",
+    "  Każdy wniosek: title, summary (z markerami [FAKT]/[INTERPRETACJA]/[HIPOTEZA]), statementKind ('fact'|'interpretation'|'hypothesis'), confidence (0.0-1.0), evidenceIds.",
+    "",
+    "Pole gaps — lista istotnych luk tematycznych (string[]).",
+    "Pole caveats — uwagi i anomalie (string[]).",
+    "Pole limitations — ograniczenia pokrycia (string[]).",
+    "Pole nextQuestions — otwarte pytania i linie/sekcje warte dalszego czytania (string[]).",
+    "  Jeśli dalsze czytanie nie jest potrzebne, wstaw 'brak'.",
+    "",
+    "Wybierz status='complete' tylko gdy coverage digest pokazuje wysokie pokrycie bez istotnych luk.",
+    "Pisz w języku tekstu źródłowego.",
+    "",
     "Recon summary:",
     formatRecon(args.recon),
+    "",
     "Coverage digest:",
     args.coverageDigest,
+    "",
     "Notes digest:",
     args.notesDigest,
-  ].join("\n\n");
+  ].join("\n");
 }
 
 export function buildReaderFinishPrompt(sessionId: string) {
@@ -142,6 +247,43 @@ export function buildReaderFinishPrompt(sessionId: string) {
     "Call the finish tool exactly once to close the session formally.",
     "Do not emit any prose. Do not call any other tool.",
   ].join("\n");
+}
+
+export function buildReaderAnswerSystemPrompt() {
+  return "You are a precise, concise analyst. Answer the user's reading goal directly based on the provided handoff. Write in the same language as the handoff content. Do not begin with meta-phrases like 'Based on the handoff…' — answer directly and substantively.";
+}
+
+export function buildReaderAnswerPrompt(args: {
+  session: ReaderSession;
+  handoff: ReaderHandoff;
+}) {
+  const conclusionLines =
+    args.handoff.conclusions.length > 0
+      ? `Wnioski:\n${args.handoff.conclusions
+          .map((c) => `- [${c.statementKind}] ${c.title}: ${c.summary}`)
+          .join("\n")}`
+      : "";
+  const gapLines =
+    args.handoff.gaps.length > 0
+      ? `Luki: ${args.handoff.gaps.join("; ")}`
+      : "";
+  const questionLines =
+    args.handoff.nextQuestions.length > 0
+      ? `Pytania otwarte: ${args.handoff.nextQuestions.join("; ")}`
+      : "";
+
+  return [
+    "Cel czytania:",
+    formatGoal(args.session.goal),
+    "",
+    "Podsumowanie wykonawcze:",
+    args.handoff.executiveSummary,
+    conclusionLines,
+    gapLines,
+    questionLines,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function buildMasterHandoffSynthesisPrompt(args: {

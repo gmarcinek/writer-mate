@@ -1,7 +1,7 @@
 import "server-only";
 
 import { openai } from "@ai-sdk/openai";
-import { generateText } from "ai";
+import { generateText, streamText } from "ai";
 import { z } from "zod";
 import {
   getReaderSession,
@@ -10,6 +10,8 @@ import {
   updateReaderSession,
 } from "@/lib/reader/persistence";
 import {
+  buildReaderAnswerPrompt,
+  buildReaderAnswerSystemPrompt,
   buildReaderFinishPrompt,
   buildReaderRunPrompt,
   buildReaderSystemPrompt,
@@ -18,7 +20,7 @@ import {
   createReaderSessionEvent,
   type ReaderSessionEventSink,
 } from "@/lib/reader/events";
-import { ReaderSessionStatus } from "@/lib/reader/types";
+import { ReaderSessionStatus, type ReaderHandoff, type ReaderSession } from "@/lib/reader/types";
 import {
   MAX_READER_STEPS,
   type ReaderOrchestrationInput,
@@ -35,6 +37,35 @@ import {
 import { resolveSessionContext } from "./session";
 import { synthesizeHandoff } from "./synthesis";
 import { createReaderTools } from "./tools";
+
+async function streamFinalAnswer(args: {
+  sessionId: string;
+  model: string;
+  emit: ReaderSessionEventSink | undefined;
+  handoff: ReaderHandoff | null | undefined;
+  session: ReaderSession;
+}) {
+  const { sessionId, model, emit, handoff, session } = args;
+  if (!handoff || !emit) return;
+
+  const result = streamText({
+    model: openai(model),
+    system: buildReaderAnswerSystemPrompt(),
+    prompt: buildReaderAnswerPrompt({ session, handoff }),
+    maxTokens: 2_000,
+    temperature: 0.3,
+  });
+
+  for await (const chunk of result.textStream) {
+    await emit(
+      createReaderSessionEvent("answer_chunk", sessionId, { text: chunk, done: false })
+    );
+  }
+
+  await emit(
+    createReaderSessionEvent("answer_chunk", sessionId, { text: "", done: true })
+  );
+}
 
 export async function runReaderOrchestration(
   input: ReaderOrchestrationInput,
@@ -120,14 +151,13 @@ export async function runReaderOrchestration(
 
     const readingResult = await generateText({
       model: openai(context.model),
-      system: buildReaderSystemPrompt(),
+      system: buildReaderSystemPrompt({ recon: context.recon, session: currentSession }),
       prompt: buildReaderRunPrompt({
         recon: context.recon,
         session: currentSession,
         existingNoteCount: initialArtifacts.notes.length,
       }),
       tools: toolRuntime.tools,
-      toolChoice: "required",
       maxSteps: MAX_READER_STEPS,
       maxTokens: 8_000,
       temperature: 0.2,
@@ -150,6 +180,14 @@ export async function runReaderOrchestration(
           startedNewSession: context.startedNewSession,
         })
       );
+
+      await streamFinalAnswer({
+        sessionId,
+        model: context.model,
+        emit,
+        handoff: artifactsAfterReading.handoff,
+        session: sessionAfterReading,
+      });
 
       return {
         session: sessionAfterReading,
@@ -266,7 +304,7 @@ export async function runReaderOrchestration(
 
     await generateText({
       model: openai(context.model),
-      system: buildReaderSystemPrompt(),
+      system: "Zamknij sesję wywołując narzędzie finish.",
       prompt: buildReaderFinishPrompt(sessionId),
       tools: { finish: toolRuntime.tools.finish },
       toolChoice: { type: "tool", toolName: "finish" },
@@ -290,6 +328,14 @@ export async function runReaderOrchestration(
         startedNewSession: context.startedNewSession,
       })
     );
+
+    await streamFinalAnswer({
+      sessionId,
+      model: context.model,
+      emit,
+      handoff: finalArtifacts.handoff ?? handoff,
+      session: finalArtifacts.session,
+    });
 
     return {
       session: finalArtifacts.session,
